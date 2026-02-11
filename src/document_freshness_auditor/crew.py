@@ -8,7 +8,10 @@ from document_freshness_auditor.tools.doc_tools import (
     ReadmeStructureTool, 
     ApiImplementationTool, 
     CodeCommentTool,
-    ListFilesTool
+    ListFilesTool,
+    SrsParserTool,
+    GitAnalyzerTool,
+    DiffGeneratorTool
 )
 from document_freshness_auditor.tools.freshness_scorer import freshness_scorer
 
@@ -21,7 +24,11 @@ class DocumentFreshnessAuditor():
 
     def __init__(self):
         self.llm = LLM(
-            model=os.getenv("MODEL_NAME", "llama3.2:3b"),
+            model=os.getenv("MODEL_NAME", "llama3.1:8b"),
+            base_url=os.getenv("API_BASE")
+        )
+        self.fix_llm = LLM(
+            model=os.getenv("FIX_MODEL_NAME", "gemini-3-flash-preview:cloud"),
             base_url=os.getenv("API_BASE")
         )
 
@@ -34,7 +41,9 @@ class DocumentFreshnessAuditor():
                 ReadmeStructureTool(), 
                 ApiImplementationTool(), 
                 CodeCommentTool(),
-                ListFilesTool()
+                ListFilesTool(),
+                SrsParserTool(),
+                GitAnalyzerTool()
             ],
             llm=self.llm,
             verbose=True
@@ -53,8 +62,9 @@ class DocumentFreshnessAuditor():
     def fix_suggester(self) -> Agent:
         return Agent(
             config=self.agents_config['fix_suggester'],
-            llm=self.llm,
-            verbose=True
+            llm=self.fix_llm,
+            verbose=True,
+            tools=[DiffGeneratorTool()]
         )
 
     @task

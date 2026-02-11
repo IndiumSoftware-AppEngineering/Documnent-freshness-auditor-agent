@@ -7,6 +7,8 @@ audit_task:
     3. Use 'README Structure Auditor' to check mentions in README.
     4. Use 'API Implementation Auditor' if routes are detected.
     5. Use 'Code Comment Auditor' to extract context.
+    6. Use 'SRS Parser' to parse local SRS markdown files.
+    7. Use 'git_analyzer' to get file modification history and last-changed dates.
   expected_output: >
     A detailed audit report of all discrepancies found, grouped by file path.
   agent: documentation_auditor
@@ -197,7 +199,10 @@ freshness_scorer_task:
 
 suggestion_task:
   description: >
-    Generate suggested fixes for all identified stale documentation at {project_path}.
+    For each scored issue, generate the exact fix. Show the current documentation
+    and the corrected version. Provide reasoning.
+    Use the diff_generator tool to create unified diffs of old → new content.
+    Produce updated documentation ready for HITL approval at {project_path}.
     The final report MUST include:
     1. Executive Summary.
     2. The 'File-by-File Scorecard' table from the analysis.

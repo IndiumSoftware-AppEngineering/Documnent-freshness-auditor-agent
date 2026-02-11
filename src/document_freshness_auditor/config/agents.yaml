@@ -25,9 +25,9 @@ freshness_scorer:
 
 fix_suggester:
   role: >
-    Documentation Fix Suggester
+    Documentation Fix Specialist
   goal: >
-    Generate precise documentation updates for any identified stale areas, ensuring they perfectly reflect the current state of the code.
+    Generate specific fix suggestions with before/after diffs, and produce updated documentation ready for HITL approval.
   backstory: >
     You are a technical writer and developer advocate who believes that accurate documentation is the foundation of developer trust. 
-    You excel at writing clear, concise, and accurate docstrings, READMEs, and API docs.
+    You focus on concrete fixes, showing exact changes and why they are correct.

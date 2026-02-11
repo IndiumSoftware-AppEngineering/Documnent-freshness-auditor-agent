@@ -1,0 +1,91 @@
+openapi: "3.0.3"
+info:
+  title: Calculator API
+  description: A simple arithmetic calculator REST API
+  version: "2.0.0"   # ← Stale: actual API is v2.1.0
+servers:
+  - url: http://localhost:8000
+    description: Local development
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: health
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+
+  /calculate:
+    post:
+      summary: Perform a calculation
+      operationId: calculate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalcRequest"
+      responses:
+        "200":
+          description: Calculation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalcResponse"
+        "400":
+          description: Invalid input
+
+  # ↓ STALE: endpoint was removed in v2.0
+  /history:
+    get:
+      summary: Get calculation history
+      operationId: getHistory
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: List of past calculations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CalcResponse"
+
+  # MISSING: /power endpoint (added in v2.1)
+  # MISSING: /batch endpoint (added in v2.1)
+
+components:
+  schemas:
+    CalcRequest:
+      type: object
+      required: [operation, a, b]
+      properties:
+        operation:
+          type: string
+          enum: [add, subtract, multiply, divide]
+        a:
+          type: number
+        b:
+          type: number
+        # MISSING: precision field (integer, default 2)
+
+    CalcResponse:
+      type: object
+      properties:
+        result:
+          type: number
+        operation:
+          type: string
