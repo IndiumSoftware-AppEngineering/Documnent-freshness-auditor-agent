@@ -140,8 +140,14 @@ def _extract_outputs(result) -> tuple[str, str]:
         for task_out in result.tasks_output:
             task_name = (getattr(task_out, "name", "") or "").lower()
             raw = getattr(task_out, "raw", "") or ""
+            # Primary analysis (freshness/scorer) outputs
             if "scorer" in task_name or "freshness" in task_name:
                 analysis_json = raw
+            # Suggestion/fix tasks may emit recommendations; capture them too
+            elif any(k in task_name for k in ("suggest", "suggestion", "fix", "recommend", "fixer")):
+                # prefer scorer output, but fall back to suggestion raw if present
+                if not analysis_json and raw:
+                    analysis_json = raw
             elif "audit" in task_name:
                 audit_raw = raw
     return analysis_json, audit_raw
