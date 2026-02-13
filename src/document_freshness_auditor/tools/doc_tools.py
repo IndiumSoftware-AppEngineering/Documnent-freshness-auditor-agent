@@ -3,6 +3,8 @@ import ast
 import re
 import subprocess
 import difflib
+import locale
+import sys
 from datetime import datetime
 from crewai.tools import BaseTool
 
@@ -16,19 +18,37 @@ def _safe_read_text(path: str) -> str:
     with open(path, "rb") as bf:
         data = bf.read()
 
-    # try common utf-8 variants first
-    for enc in ("utf-8", "utf-8-sig"):
+    # build a prioritized list of encodings to try
+    encodings = ["utf-8", "utf-8-sig"]
+
+    # include the system preferred encoding if it isn't already present
+    try:
+        pref = locale.getpreferredencoding(False) or ""
+    except Exception:
+        pref = ""
+    if pref and pref.lower() not in (e.lower() for e in encodings):
+        encodings.append(pref)
+
+    # on Windows, try the 'mbcs' codec which maps to the ANSI code page
+    if sys.platform.startswith("win") and "mbcs" not in encodings:
+        encodings.append("mbcs")
+
+    # common Windows fallback
+    if "cp1252" not in encodings:
+        encodings.append("cp1252")
+
+    # latin-1 will never fail (direct byte->unicode mapping)
+    if "latin-1" not in encodings:
+        encodings.append("latin-1")
+
+    for enc in encodings:
         try:
             return data.decode(enc)
         except Exception:
-            pass
+            continue
 
-    # try Windows cp1252 as a common fallback on Windows systems
-    try:
-        return data.decode("cp1252")
-    except Exception:
-        # final fallback: decode as utf-8 with replacement to avoid exceptions
-        return data.decode("utf-8", errors="replace")
+    # final fallback: decode as utf-8 with replacement to avoid exceptions
+    return data.decode("utf-8", errors="replace")
 
 class DocstringSignatureTool(BaseTool):
     name: str = "Docstring Signature Auditor"
