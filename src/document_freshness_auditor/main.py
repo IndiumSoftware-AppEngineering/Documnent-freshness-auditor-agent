@@ -54,3 +54,8 @@ def test():
         DocumentFreshnessAuditor().crew().test(n_iterations=int(sys.argv[1]), eval_llm=sys.argv[2], inputs=inputs)
     except Exception as e:
         raise Exception(f"An error occurred while testing the crew: {e}")
+
+def serve():
+    """Start the FastAPI server."""
+    from document_freshness_auditor.api import serve as _serve
+    _serve()

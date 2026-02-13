@@ -199,16 +199,18 @@ freshness_scorer_task:
 
 suggestion_task:
   description: >
-    For each scored issue, generate the exact fix. Show the current documentation
-    and the corrected version. Provide reasoning.
-    Use the diff_generator tool to create unified diffs of old → new content.
-    Produce updated documentation ready for HITL approval at {project_path}.
-    The final report MUST include:
-    1. Executive Summary.
-    2. The 'File-by-File Scorecard' table from the analysis.
-    3. Detailed 'File-by-File Analysis' section with diffs or clear instructions.
-    4. Recommendations.
+    For EACH file with issues, you MUST:
+    1. Call 'read_file' with the absolute file path to get the current content.
+    2. Generate the corrected full file content (with documentation fixed).
+    3. Call 'diff_generator' with old_text=<current content>, new_text=<corrected content> to show changes.
+    4. Call 'apply_fix' with file_path=<absolute path> and new_content=<corrected content> to WRITE the fix.
+    Repeat steps 1-4 for EVERY file that has issues.
+    After all files are fixed, produce a final markdown report titled 'Documentation Freshness Audit Report' with:
+    - Executive Summary
+    - File-by-File Scorecard table
+    - Detailed File-by-File Analysis with diffs
+    - Recommendations
   expected_output: >
-    A final markdown report titled 'Documentation Freshness Audit Report' with all required sections and the populated scorecard table.
+    A final markdown report AND all documentation files in {project_path} must be updated in-place using apply_fix.
   agent: fix_suggester
   human_input: true

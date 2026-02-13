@@ -11,7 +11,9 @@ from document_freshness_auditor.tools.doc_tools import (
     ListFilesTool,
     SrsParserTool,
     GitAnalyzerTool,
-    DiffGeneratorTool
+    DiffGeneratorTool,
+    ApplyFixTool,
+    ReadFileTool
 )
 from document_freshness_auditor.tools.freshness_scorer import freshness_scorer
 
@@ -64,7 +66,7 @@ class DocumentFreshnessAuditor():
             config=self.agents_config['fix_suggester'],
             llm=self.fix_llm,
             verbose=True,
-            tools=[DiffGeneratorTool()]
+            tools=[ReadFileTool(), DiffGeneratorTool(), ApplyFixTool()]
         )
 
     @task
@@ -84,6 +86,27 @@ class DocumentFreshnessAuditor():
         return Task(
             config=self.tasks_config['suggestion_task'],
             output_file='freshness_audit_report.md'
+        )
+
+    def analysis_only_crew(self) -> Crew:
+        return Crew(
+            agents=[self.documentation_auditor(), self.freshness_scorer()],
+            tasks=[self.audit_task(), self.freshness_scorer_task()],
+            process=Process.sequential,
+            verbose=True,
+        )
+
+    def fix_only_crew(self) -> Crew:
+        suggestion = Task(
+            config=self.tasks_config['suggestion_task'],
+            human_input=False,
+            output_file='freshness_audit_report.md'
+        )
+        return Crew(
+            agents=[self.fix_suggester()],
+            tasks=[suggestion],
+            process=Process.sequential,
+            verbose=True,
         )
 
     @crew

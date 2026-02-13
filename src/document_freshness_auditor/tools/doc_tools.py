@@ -250,3 +250,39 @@ class GitAnalyzerTool(BaseTool):
                 return current
             current = os.path.dirname(current)
         return ""
+
+
+class ApplyFixTool(BaseTool):
+    name: str = "apply_fix"
+    description: str = (
+        "Writes the corrected documentation content to a file, applying the fix. "
+        "Use this tool to actually update documentation files after generating a diff."
+    )
+
+    def _run(self, file_path: str, new_content: str) -> str:
+        """Write new_content to file_path, creating dirs if needed."""
+        if not file_path:
+            return "Error: file_path is required."
+        try:
+            os.makedirs(os.path.dirname(file_path) or ".", exist_ok=True)
+            with open(file_path, "w") as f:
+                f.write(new_content)
+            return f"Successfully wrote {len(new_content)} bytes to {file_path}"
+        except Exception as exc:
+            return f"Error writing to {file_path}: {exc}"
+
+
+class ReadFileTool(BaseTool):
+    name: str = "read_file"
+    description: str = "Reads the entire content of a file and returns it as a string."
+
+    def _run(self, file_path: str) -> str:
+        if not file_path:
+            return "Error: file_path is required."
+        if not os.path.exists(file_path):
+            return f"Error: File {file_path} not found."
+        try:
+            with open(file_path, "r") as f:
+                return f.read()
+        except Exception as exc:
+            return f"Error reading {file_path}: {exc}"
