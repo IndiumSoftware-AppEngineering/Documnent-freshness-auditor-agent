@@ -6,6 +6,30 @@ import difflib
 from datetime import datetime
 from crewai.tools import BaseTool
 
+
+def _safe_read_text(path: str) -> str:
+    """Read a file robustly: try UTF-8 (and BOM), then cp1252, then fallback.
+
+    This prevents the Windows 'charmap' codec can't decode byte errors by
+    decoding bytes explicitly and using a replacement strategy as a last resort.
+    """
+    with open(path, "rb") as bf:
+        data = bf.read()
+
+    # try common utf-8 variants first
+    for enc in ("utf-8", "utf-8-sig"):
+        try:
+            return data.decode(enc)
+        except Exception:
+            pass
+
+    # try Windows cp1252 as a common fallback on Windows systems
+    try:
+        return data.decode("cp1252")
+    except Exception:
+        # final fallback: decode as utf-8 with replacement to avoid exceptions
+        return data.decode("utf-8", errors="replace")
+
 class DocstringSignatureTool(BaseTool):
     name: str = "Docstring Signature Auditor"
     description: str = "Compares function signatures with their docstrings to identify missing parameters or type mismatches."
@@ -13,9 +37,12 @@ class DocstringSignatureTool(BaseTool):
     def _run(self, file_path: str) -> str:
         if not os.path.exists(file_path):
             return f"Error: File {file_path} not found."
-        
-        with open(file_path, "r") as f:
-            tree = ast.parse(f.read())
+
+        try:
+            src = _safe_read_text(file_path)
+            tree = ast.parse(src)
+        except Exception as exc:
+            return f"Error parsing {file_path}: {exc}"
         
         results = []
         for node in ast.walk(tree):
@@ -42,9 +69,8 @@ class ReadmeStructureTool(BaseTool):
         readme_path = os.path.join(root_dir, "README.md")
         if not os.path.exists(readme_path):
             return "README.md not found in root directory."
-        
-        with open(readme_path, "r") as f:
-            content = f.read()
+
+        content = _safe_read_text(readme_path)
         
         # Look for patterns that look like file paths or names
         mentions = re.findall(r'`([^`]+\.[a-z]+)`', content)
@@ -63,9 +89,8 @@ class ApiImplementationTool(BaseTool):
     def _run(self, file_path: str) -> str:
         if not os.path.exists(file_path):
             return f"Error: File {file_path} not found."
-        
-        with open(file_path, "r") as f:
-            content = f.read()
+
+        content = _safe_read_text(file_path)
         
         # Simple regex for common route decorators
         routes = re.findall(r'@(?:app|router)\.(?:get|post|put|delete|patch)\("([^"]+)"\)', content)
@@ -78,9 +103,9 @@ class CodeCommentTool(BaseTool):
     def _run(self, file_path: str) -> str:
         if not os.path.exists(file_path):
             return f"Error: File {file_path} not found."
-        
-        with open(file_path, "r") as f:
-            lines = f.readlines()
+
+        content = _safe_read_text(file_path)
+        lines = content.splitlines(keepends=True)
 
         comments_with_context = []
 
@@ -190,8 +215,7 @@ class SrsParserTool(BaseTool):
         results = []
         req_pattern = re.compile(r"\b([A-Z]{2,}-\d+)\b")
         for md_file in md_files:
-            with open(md_file, "r") as f:
-                content = f.read()
+            content = _safe_read_text(md_file)
             headings = [line.strip() for line in content.splitlines() if line.strip().startswith("#")]
             req_ids = list(dict.fromkeys(req_pattern.findall(content)))
             summary = content[:400].strip().replace("\n", " ")
@@ -265,7 +289,7 @@ class ApplyFixTool(BaseTool):
             return "Error: file_path is required."
         try:
             os.makedirs(os.path.dirname(file_path) or ".", exist_ok=True)
-            with open(file_path, "w") as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 f.write(new_content)
             return f"Successfully wrote {len(new_content)} bytes to {file_path}"
         except Exception as exc:
@@ -282,7 +306,6 @@ class ReadFileTool(BaseTool):
         if not os.path.exists(file_path):
             return f"Error: File {file_path} not found."
         try:
-            with open(file_path, "r") as f:
-                return f.read()
+            return _safe_read_text(file_path)
         except Exception as exc:
             return f"Error reading {file_path}: {exc}"
