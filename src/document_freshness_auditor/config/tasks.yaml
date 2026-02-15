@@ -32,7 +32,10 @@ audit_task:
     7. FILE HISTORY:
        - Use git to find when code and docs last changed
        - Flag files where code changed but docs didn't (6+ months)
-    
+       
+    Every issue must cite specific file content as evidence.
+    If evidence is missing, mark issue as "low confidence" instead of omitting it.
+
     Output: JSON array with issues grouped by file, each with severity and description.
   expected_output: >
     JSON array of issues: [{"file": "path", "type": "docstring|readme|api|srs|comment", "line": N, "severity": "critical|major|minor", "description": "..."}]

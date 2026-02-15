@@ -244,7 +244,7 @@ class CodeCommentTool(BaseTool):
         return str(comments_with_context) if comments_with_context else "No inline comments found."
 
 class ListFilesTool(BaseTool):
-    name: str = "List Files Tool"
+    name: str = "list_files"
     description: str = "Recursively lists all files in a given directory to help identify which files need auditing."
 
     def _run(self, directory: str) -> str:

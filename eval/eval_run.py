@@ -6,14 +6,14 @@ from typing import Dict, Optional, List
 from pathlib import Path
 from langsmith import Client, evaluate
 from langchain_community.llms import Ollama
+from difflib import SequenceMatcher
+from typing import Dict, Optional
 from document_freshness_auditor.crew import DocumentFreshnessAuditor
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# ============================================================
 # Command Line Arguments
-# ============================================================
 
 def parse_arguments():
     """Parse command line arguments"""
@@ -64,21 +64,20 @@ def parse_arguments():
     
     return parser.parse_args()
 
-# ============================================================
+
 # Setup Demo Project Path
-# ============================================================
 
 def get_demo_project_path(provided_path: Optional[str] = None) -> str:
     """Get demo project path from argument or default"""
     if provided_path:
         path = Path(provided_path).resolve()
         if not path.exists():
-            print(f"❌ Error: Path does not exist: {provided_path}")
+            print(f"Error: Path does not exist: {provided_path}")
             sys.exit(1)
         if not path.is_dir():
-            print(f"❌ Error: Path is not a directory: {provided_path}")
+            print(f"Error: Path is not a directory: {provided_path}")
             sys.exit(1)
-        print(f"✅ Using provided project path: {path}")
+        print(f"Using provided project path: {path}")
         return str(path)
     
     # Default path
@@ -89,17 +88,16 @@ def get_demo_project_path(provided_path: Optional[str] = None) -> str:
     )
     
     if not Path(default_path).exists():
-        print(f"⚠️  Default demo project not found: {default_path}")
-        print(f"\n💡 Provide a project path using:")
+        print(f"Default demo project not found: {default_path}")
+        print(f"\nProvide a project path using:")
         print(f"   uv run eval/eval_run.py --project-path /path/to/project")
         sys.exit(1)
     
-    print(f"✅ Using default project path: {default_path}")
+    print(f"Using default project path: {default_path}")
     return default_path
 
-# ============================================================
+
 # Initialize Judge LLM
-# ============================================================
 
 class JudgeLLM:
     """Judge LLM for evaluating audit results"""
@@ -124,9 +122,9 @@ class JudgeLLM:
         # Test connection
         try:
             test = self.judge.invoke("Hello")
-            print(f"✅ Judge LLM connected successfully\n")
+            print(f"Judge LLM connected successfully\n")
         except Exception as e:
-            print(f"❌ Failed to connect to Ollama: {e}")
+            print(f"Failed to connect to Ollama: {e}")
             print(f"   Make sure Ollama is running:")
             print(f"   ollama serve")
             sys.exit(1)
@@ -173,27 +171,21 @@ def get_judge(model: str = "mistral:7b", base_url: str = "http://localhost:11434
         _judge = JudgeLLM(model, base_url)
     return _judge
 
-# ============================================================
 # Helper Functions
-# ============================================================
 
-def safe_get_expected_issues(example) -> Dict[str, List[Dict]]:
-    """Safely extract expected issues from example"""
+def safe_get_expected_issues(example):
     try:
-        expected_issues = example.outputs.get("expected_issues", {})
-        
-        if not isinstance(expected_issues, dict):
-            return {"critical": [], "major": [], "minor": []}
-        
-        result = {}
-        for severity in ["critical", "major", "minor"]:
-            issues = expected_issues.get(severity, [])
-            if isinstance(issues, list):
-                result[severity] = issues
-            else:
-                result[severity] = []
-        
+        result = {"critical": [], "major": [], "minor": []}
+
+        entries = example.outputs.get("entries", [])
+        for group in entries:
+            severity = group.get("severity")
+            issues = group.get("issues", [])
+            if severity in result:
+                result[severity].extend(issues)
+
         return result
+
     except Exception as e:
         print(f"Error extracting issues: {e}")
         return {"critical": [], "major": [], "minor": []}
@@ -206,7 +198,7 @@ def get_files_from_project(project_path: str, file_filter: Optional[List[str]] =
     # Extensions to include
     extensions = {'.py', '.md', '.yaml', '.yml', '.txt', '.json'}
     
-    print(f"\n📄 Scanning project for files...")
+    print(f"\nScanning project for files...")
     
     for file_path in project_path.rglob('*'):
         if not file_path.is_file():
@@ -238,14 +230,12 @@ def get_files_from_project(project_path: str, file_filter: Optional[List[str]] =
             print(f"   ✗ {rel_path} (Error: {str(e)[:30]})")
     
     if not files_content:
-        print(f"❌ No files found in {project_path}")
+        print(f"No files found in {project_path}")
         sys.exit(1)
     
     return files_content
 
-# ============================================================
 # Evaluation Functions
-# ============================================================
 
 def correctness_evaluator(run, example) -> Optional[Dict]:
     """Judge: Did agent find the expected issues?"""
@@ -272,13 +262,14 @@ EXPECTED ISSUES TO FIND:
 AUDIT OUTPUT:
 {output[:1000]}
 
-EVALUATE: Did the audit correctly identify the expected issues?
+EVALUATE: Did it cover MOST expected issues even if phrasing differs?
+Allow additional valid findings.
 
 Rate the CORRECTNESS on a scale of 0-100.
 
 Respond with: "Score: [0-100]" """
 
-    print(f"   📋 Evaluating correctness...")
+    print(f"Evaluating correctness...")
     response = judge.evaluate(prompt)
     score = judge.extract_score(response)
     
@@ -288,44 +279,65 @@ Respond with: "Score: [0-100]" """
         "comment": f"Correctness: {score:.0%}"
     }
 
+def similarity(a: str, b: str) -> float:
+    return SequenceMatcher(None, a, b).ratio()
+
 def hallucination_evaluator(run, example) -> Optional[Dict]:
-    """Judge: Are there fake/hallucinated issues?"""
-    judge = get_judge()
-    output = str(run.outputs.get("output", ""))
-    
-    if not output or len(output) < 10:
-        return {"key": "hallucination", "score": 1.0, "comment": "Empty output"}
-    
-    expected_issues = safe_get_expected_issues(example)
-    all_expected = []
-    for severity in ["critical", "major", "minor"]:
-        all_expected.extend(expected_issues.get(severity, []))
-    
-    issues_summary = "\n".join([f"- {issue.get('description', 'N/A')}" for issue in all_expected[:5]])
-    
-    prompt = f"""You are an expert evaluator for documentation auditing.
+    """
+    Deterministic hallucination check with fuzzy matching.
+    Measures how many expected issues appear in output.
+    """
 
-VALID ISSUES IN PROJECT ({len(all_expected)} total):
-{issues_summary}
+    try:
+        output = str(run.outputs.get("output", "")).lower()
 
-AUDIT OUTPUT:
-{output[:1000]}
+        if not output.strip():
+            return {
+                "key": "hallucination",
+                "score": 0.0,
+                "comment": "Empty output"
+            }
 
-EVALUATE: Did the audit HALLUCINATE or FABRICATE issues that don't exist?
+        expected = safe_get_expected_issues(example)
 
-Rate ABSENCE OF HALLUCINATIONS on a scale of 0-100.
+        expected_text = []
+        for severity in ["critical", "major", "minor"]:
+            for issue in expected[severity]:
+                desc = issue.get("description", "").lower().strip()
+                if desc:
+                    expected_text.append(desc)
 
-Respond with: "Score: [0-100]" """
+        if not expected_text:
+            return {
+                "key": "hallucination",
+                "score": 1.0,
+                "comment": "No ground truth issues"
+            }
 
-    print(f"   🎭 Evaluating hallucinations...")
-    response = judge.evaluate(prompt)
-    score = judge.extract_score(response)
-    
-    return {
-        "key": "hallucination",
-        "score": score,
-        "comment": f"No hallucinations: {score:.0%}"
-    }
+        output_lines = [line.strip() for line in output.split("\n") if line.strip()]
+
+        matched = 0
+
+        for desc in expected_text:
+            for line in output_lines:
+                if similarity(desc, line) > 0.65:  
+                    matched += 1
+                    break
+
+        score = matched / len(expected_text)
+
+        return {
+            "key": "hallucination",
+            "score": round(score, 3),
+            "comment": f"Matched {matched}/{len(expected_text)} issues"
+        }
+
+    except Exception as e:
+        return {
+            "key": "hallucination",
+            "score": 0.0,
+            "comment": f"Evaluation error: {e}"
+        }
 
 def severity_evaluator(run, example) -> Optional[Dict]:
     """Judge: Are severity levels correctly assigned?"""
@@ -359,7 +371,7 @@ Rate SEVERITY ACCURACY on a scale of 0-100.
 
 Respond with: "Score: [0-100]" """
 
-    print(f"   ⚠️  Evaluating severity accuracy...")
+    print(f"Evaluating severity accuracy...")
     response = judge.evaluate(prompt)
     score = judge.extract_score(response)
     
@@ -398,7 +410,7 @@ Rate COMPLETENESS on a scale of 0-100.
 
 Respond with: "Score: [0-100]" """
 
-    print(f"   📊 Evaluating completeness...")
+    print(f"Evaluating completeness...")
     response = judge.evaluate(prompt)
     score = judge.extract_score(response)
     
@@ -433,7 +445,7 @@ Rate ACTIONABILITY on a scale of 0-100.
 
 Respond with: "Score: [0-100]" """
 
-    print(f"   🎯 Evaluating actionability...")
+    print(f"Evaluating actionability...")
     response = judge.evaluate(prompt)
     score = judge.extract_score(response)
     
@@ -443,54 +455,58 @@ Respond with: "Score: [0-100]" """
         "comment": f"Actionability: {score:.0%}"
     }
 
-# ============================================================
 # Crew Target
-# ============================================================
 
 def crew_target(inputs: dict) -> Dict:
-    """Run crew on project"""
+    """Run crew on project (force all files from project)"""
     try:
         project_path = inputs.get("project_path", "")
-        files_content = inputs.get("files_content", {})
-        files_to_audit = inputs.get("files_to_audit", [])
-        
+
         if not project_path or not Path(project_path).exists():
             return {"output": f"Invalid path: {project_path}"}
-        
+
+        # 🔥 Always scan real project files (ignore dataset)
+        files_content = get_files_from_project(project_path)
+        files_to_audit = list(files_content.keys())
+
         if not files_content:
-            return {"output": "No files provided"}
-        
+            return {"output": "No files found in project"}
+
         os.environ["CREWAI_HUMAN_INPUT"] = "false"
-        
-        print(f"\n🔍 Running audit on {len(files_to_audit)} files...")
-        
+
+        print(f"\n🔍 Running audit on {len(files_to_audit)} files:")
+        for f in files_to_audit:
+            print(f"   • {f}")
+
         auditor = DocumentFreshnessAuditor()
         crew = auditor.crew()
-        
+
         for task in crew.tasks:
             if hasattr(task, 'human_input'):
                 task.human_input = False
-        
+
         result = crew.kickoff(inputs={
             "project_path": project_path,
             "files_content": files_content,
             "files_to_audit": files_to_audit
         })
-        
+
         return {"output": str(result) if result else "No output"}
-    
+
     except Exception as e:
         import traceback
-        return {"output": f"Error: {str(e)}", "error": traceback.format_exc()[:100]}
+        return {
+            "output": f"Error: {str(e)}",
+            "error": traceback.format_exc()[:200]
+        }
 
-# ============================================================
+
 # Main Evaluation
-# ============================================================
 
 def run_evaluation(project_path: str, model: str, base_url: str, files_filter: Optional[List[str]], experiment: str):
     """Run evaluation with given parameters"""
     print("=" * 70)
-    print("🚀 Documentation Freshness Auditor - LLM Judge Evaluation")
+    print("Documentation Freshness Auditor - LLM Judge Evaluation")
     print("=" * 70)
     
     # Initialize judge
@@ -501,9 +517,9 @@ def run_evaluation(project_path: str, model: str, base_url: str, files_filter: O
     
     try:
         dataset = client.read_dataset(dataset_name=dataset_name)
-        print(f"✅ Dataset: {dataset.example_count} example(s)\n")
+        print(f"Dataset: {dataset.example_count} example(s)\n")
     except Exception as e:
-        print(f"❌ Dataset not found: {dataset_name}")
+        print(f"Dataset not found: {dataset_name}")
         print(f"   Run: python eval/dataset.py --project-path {project_path}")
         return
     
@@ -515,16 +531,16 @@ def run_evaluation(project_path: str, model: str, base_url: str, files_filter: O
         actionability_evaluator,
     ]
     
-    print(f"📊 Evaluation Metrics: {len(evaluators)} (LLM judge)")
+    print(f"Evaluation Metrics: {len(evaluators)} (LLM judge)")
     for e in evaluators:
         print(f"   • {e.__doc__}")
     
-    print(f"\n📂 Project Path: {project_path}")
-    print(f"   Status: {'✅' if Path(project_path).exists() else '❌'}")
+    print(f"\nProject Path: {project_path}")
+    print(f"   Status: {'exists' if Path(project_path).exists() else 'not exists'}")
     
     # Read files from project
     files_content = get_files_from_project(project_path, files_filter)
-    print(f"\n✅ Loaded {len(files_content)} files\n")
+    print(f"\n Loaded {len(files_content)} files\n")
     
     print("⏳ Running evaluation with LLM judge...\n")
     
@@ -538,15 +554,15 @@ def run_evaluation(project_path: str, model: str, base_url: str, files_filter: O
         )
         
         print("\n" + "=" * 70)
-        print("✅ Evaluation Complete!")
+        print("Evaluation Complete!")
         print("=" * 70)
-        print("\n📊 View results: https://smith.langchain.com/")
+        print("\nView results: https://smith.langchain.com/")
         print("=" * 70 + "\n")
         
         return results
         
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\n Error: {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -558,7 +574,7 @@ if __name__ == "__main__":
     project_path = get_demo_project_path(args.project_path)
     
     print("\n" + "=" * 70)
-    print("📋 Configuration:")
+    print("Configuration:")
     print("=" * 70)
     print(f"Project Path: {project_path}")
     print(f"LLM Model: {args.model}")

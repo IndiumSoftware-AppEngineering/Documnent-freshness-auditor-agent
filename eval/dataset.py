@@ -1,270 +1,139 @@
 import os
-import json
-from pathlib import Path
 from dotenv import load_dotenv
 from langsmith import Client
 
 load_dotenv()
 
+
 def create_dataset():
-    """Create ground truth dataset matching freshness_audit_report.md"""
-    
+    """Create documentation freshness dataset (2026 ground truth)"""
+
     client = Client()
-    dataset_name = "Doc_Freshness_Ground_Truth"
+    dataset_name = "documentation_freshness_audit_2026"
+
     
-    # Delete existing dataset if it exists
     try:
         client.delete_dataset(dataset_name=dataset_name)
-        print(f"🗑️  Deleted existing dataset: {dataset_name}\n")
-    except:
+        print(f"🗑️ Deleted existing dataset: {dataset_name}\n")
+    except Exception:
         pass
-    
-    # Create new dataset
+
     dataset = client.create_dataset(
         dataset_name=dataset_name,
-        description="Ground truth for documentation freshness audit evaluation"
+        description="Ground truth dataset for documentation freshness audit (2026)"
     )
-    
-    print(f"✅ Created dataset: {dataset_name}\n")
-    
-    # Define ground truth: Expected issues from audit report
+
+    print(f"Created dataset: {dataset_name}\n")
+
     ground_truth = {
         "inputs": {
             "project_path": "/Users/vinaypodeti/Desktop/Document-Freshness-Auditor_agent/DOCUMENTATION-FRESHNESS-AUDITOR-AGENT-BE/src/document_freshness_auditor/demo-project",
-            "files": ["api.py", "calculator.py", "README.md"]
+            "files": [
+                "README.md",
+                "api.py",
+                "calculator.py",
+                "docs/SRS.md",
+                "docs/architecture.md",
+                "openapi.yaml",
+                "utils.py"
+            ]
         },
         "outputs": {
-            # CRITICAL ISSUES (3 total)
-            "critical_issues": [
+            "dataset_name": "documentation_freshness_audit_2026",
+            "estimated_hours": 4.5,
+            "summary": {
+                "total_issues": 22,
+                "critical": 3,
+                "major": 19,
+                "minor": 0
+            },
+            "entries": [
                 {
-                    "id": "CRIT-001",
-                    "type": "missing_docstring",
-                    "file": "calculator.py",
-                    "function": "factorial",
-                    "description": "Missing docstring for factorial function",
-                    "impact": "IDE hover-help unavailable, API unclear"
+                    "severity": "critical",
+                    "issues": [
+                        {
+                            "id": "CRIT-001",
+                            "file": "calculator.py",
+                            "type": "missing_docstring",
+                            "function": "factorial",
+                            "description": "Missing docstring for factorial function"
+                        },
+                        {
+                            "id": "CRIT-002",
+                            "file": "api.py",
+                            "type": "unimplemented_endpoint",
+                            "endpoint": "/calculate",
+                            "description": "OpenAPI endpoint declared but not implemented"
+                        },
+                        {
+                            "id": "CRIT-003",
+                            "file": "api.py",
+                            "type": "unimplemented_endpoint",
+                            "endpoint": "/history",
+                            "description": "OpenAPI endpoint declared but not implemented"
+                        }
+                    ]
                 },
                 {
-                    "id": "CRIT-002",
-                    "type": "unimplemented_endpoint",
-                    "file": "api.py",
-                    "endpoint": "/calculate",
-                    "description": "OpenAPI endpoint declared but not implemented",
-                    "impact": "Clients get 404 errors, breaks integration tests"
+                    "severity": "major",
+                    "issues": [
+                        {"id": "MAJ-001", "file": "api.py", "function": "calculate", "description": "Docstring lists wrong parameter"},
+                        {"id": "MAJ-002", "file": "api.py", "function": "power_endpoint", "description": "Missing parameter documentation"},
+                        {"id": "MAJ-003", "file": "api.py", "function": "batch_calculate", "description": "Missing parameter description"},
+                        {"id": "MAJ-004", "file": "calculator.py", "function": "add", "description": "Docstring missing parameter 'b'"},
+                        {"id": "MAJ-005", "file": "calculator.py", "function": "subtract", "description": "Missing parameter in docstring"},
+                        {"id": "MAJ-006", "file": "calculator.py", "function": "multiply", "description": "Missing 'precision' parameter in docstring"},
+                        {"id": "MAJ-007", "file": "calculator.py", "function": "divide", "description": "Missing 'safe' parameter documentation"},
+                        {"id": "MAJ-008", "file": "calculator.py", "function": "power", "description": "Missing parameters documentation"},
+                        {"id": "MAJ-009", "file": "calculator.py", "function": "fibonacci", "description": "Missing parameter documentation"},
+                        {"id": "MAJ-010", "file": "README.md", "description": "References non-existent helpers.py and config.yaml"},
+                        {"id": "MAJ-011", "file": "README.md", "description": "Documents removed /history endpoint"},
+                        {"id": "MAJ-012", "file": "README.md", "description": "Missing /power and /batch endpoints"},
+                        {"id": "MAJ-013", "file": "openapi.yaml", "description": "Version mismatch: spec says 2.0.0, code says 2.1.0"},
+                        {"id": "MAJ-014", "file": "openapi.yaml", "description": "Missing /power and /batch endpoints"},
+                        {"id": "MAJ-015", "file": "openapi.yaml", "description": "Missing precision field in CalcRequest schema"},
+                        {"id": "MAJ-016", "file": "docs/architecture.md", "description": "References deleted helpers.py module"},
+                        {"id": "MAJ-017", "file": "docs/architecture.md", "description": "References non-existent auth.py"},
+                        {"id": "MAJ-018", "file": "docs/SRS.md", "description": "References unimplemented functions"},
+                        {"id": "MAJ-019", "file": "docs/SRS.md", "description": "References non-existent modules"}
+                    ]
                 },
                 {
-                    "id": "CRIT-003",
-                    "type": "unimplemented_endpoint",
-                    "file": "api.py",
-                    "endpoint": "/history",
-                    "description": "OpenAPI endpoint declared but not implemented",
-                    "impact": "Clients get 404 errors, breaks contract"
+                    "severity": "minor",
+                    "issues": []
                 }
             ],
-            
-            # MAJOR ISSUES (19 total)
-            "major_issues": [
-                {
-                    "id": "MAJ-001",
-                    "type": "stale_docstring",
-                    "file": "api.py",
-                    "function": "calculate",
-                    "description": "Docstring lists wrong parameter 'x' instead of 'a' and 'b'",
-                    "impact": "API contract mismatch, misleading IDE help"
-                },
-                {
-                    "id": "MAJ-002",
-                    "type": "missing_params_in_docstring",
-                    "file": "api.py",
-                    "function": "power_endpoint",
-                    "description": "Missing 'base' and 'exponent' parameter documentation",
-                    "impact": "Developers don't know what parameters to pass"
-                },
-                {
-                    "id": "MAJ-003",
-                    "type": "missing_params_in_docstring",
-                    "file": "api.py",
-                    "function": "batch_calculate",
-                    "description": "Missing 'requests' parameter description",
-                    "impact": "API usage unclear, onboarding friction"
-                },
-                {
-                    "id": "MAJ-004",
-                    "type": "stale_docstring",
-                    "file": "calculator.py",
-                    "function": "add",
-                    "description": "Docstring missing parameter 'b', no return type hint",
-                    "impact": "Incomplete API documentation"
-                },
-                {
-                    "id": "MAJ-005",
-                    "type": "stale_docstring",
-                    "file": "calculator.py",
-                    "function": "subtract",
-                    "description": "Missing 'absolute' parameter in docstring",
-                    "impact": "New parameter not documented"
-                },
-                {
-                    "id": "MAJ-006",
-                    "type": "stale_docstring",
-                    "file": "calculator.py",
-                    "function": "multiply",
-                    "description": "Missing 'precision' parameter in docstring",
-                    "impact": "Parameter behavior unclear"
-                },
-                {
-                    "id": "MAJ-007",
-                    "type": "stale_docstring",
-                    "file": "calculator.py",
-                    "function": "divide",
-                    "description": "Missing 'safe' parameter and incorrect Raises section",
-                    "impact": "Behavior change not documented"
-                },
-                {
-                    "id": "MAJ-008",
-                    "type": "stale_docstring",
-                    "file": "calculator.py",
-                    "function": "power",
-                    "description": "Missing parameters 'base', 'exponent', 'mod' documentation",
-                    "impact": "Function signature mismatch with docs"
-                },
-                {
-                    "id": "MAJ-009",
-                    "type": "stale_docstring",
-                    "file": "calculator.py",
-                    "function": "fibonacci",
-                    "description": "Missing 'n' and 'memo' parameter documentation",
-                    "impact": "Function contract unclear"
-                },
-                {
-                    "id": "MAJ-010",
-                    "type": "stale_reference",
-                    "file": "README.md",
-                    "reference": "requires 'requirements.txt'",
-                    "description": "Project now uses Poetry, requirements.txt outdated",
-                    "impact": "Installation instructions fail"
-                },
-                {
-                    "id": "MAJ-011",
-                    "type": "stale_reference",
-                    "file": "README.md",
-                    "reference": "utils.py and helpers.py",
-                    "description": "Files mentioned but don't exist in codebase",
-                    "impact": "Users look for non-existent modules"
-                },
-                {
-                    "id": "MAJ-012",
-                    "type": "missing_info",
-                    "file": "README.md",
-                    "section": "Setup",
-                    "description": "config.yaml location not specified",
-                    "impact": "Users don't know where to place config"
-                },
-                {
-                    "id": "MAJ-013",
-                    "type": "stale_reference",
-                    "file": "README.md",
-                    "reference": "tests/ directory location",
-                    "description": "Tests directory not documented clearly",
-                    "impact": "Running tests unclear"
-                },
-                {
-                    "id": "MAJ-014",
-                    "type": "stale_reference",
-                    "file": "README.md",
-                    "reference": "calculator.py path",
-                    "description": "Path listed as '/src/calculator.py' but is actually 'demo-project/calculator.py'",
-                    "impact": "Wrong path confuses developers"
-                },
-                {
-                    "id": "MAJ-015",
-                    "type": "missing_info",
-                    "file": "README.md",
-                    "section": "Endpoints",
-                    "description": "/calculate and /history endpoints not implemented but documented",
-                    "impact": "API contract broken"
-                },
-                {
-                    "id": "MAJ-016",
-                    "type": "missing_info",
-                    "file": "api.py",
-                    "section": "OpenAPI",
-                    "description": "/batch endpoint declared but not aligned with current code",
-                    "impact": "OpenAPI spec mismatch"
-                },
-                {
-                    "id": "MAJ-017",
-                    "type": "missing_info",
-                    "file": "api.py",
-                    "section": "OpenAPI",
-                    "description": "/power endpoint declared but not aligned with current code",
-                    "impact": "OpenAPI spec mismatch"
-                },
-                {
-                    "id": "MAJ-018",
-                    "type": "missing_section",
-                    "file": "README.md",
-                    "section": "Configuration",
-                    "description": "Configuration section needs expansion with new location details",
-                    "impact": "Setup incomplete"
-                },
-                {
-                    "id": "MAJ-019",
-                    "type": "incomplete_section",
-                    "file": "README.md",
-                    "section": "Running the demo",
-                    "description": "Instructions for running tests and examples are vague",
-                    "impact": "Onboarding friction"
-                }
-            ],
-            
-            # SUMMARY STATISTICS
-            "total_critical": 3,
-            "total_major": 19,
-            "total_minor": 0,
-            "total_issues": 22,
-            "freshness_score": 34,
-            "estimated_effort_hours": 4.5,
-            
-            # FILES AFFECTED
-            "files_affected": {
-                "api.py": {
-                    "critical": 2,
-                    "major": 3,
-                    "freshness_score": 31
-                },
-                "calculator.py": {
-                    "critical": 1,
-                    "major": 6,
-                    "freshness_score": 30
-                },
-                "README.md": {
-                    "critical": 0,
-                    "major": 10,
-                    "freshness_score": 40
-                }
+            "metadata": {
+                "year": 2026,
+                "audit_type": "documentation_freshness",
+                "files_audited": [
+                    "README.md",
+                    "api.py",
+                    "calculator.py",
+                    "docs/SRS.md",
+                    "docs/architecture.md",
+                    "openapi.yaml",
+                    "utils.py"
+                ]
             }
         }
     }
-    
-    # Add example to dataset
-    example = client.create_example(
+
+    client.create_example(
         inputs=ground_truth["inputs"],
         outputs=ground_truth["outputs"],
         dataset_id=dataset.id
     )
-    
-    print(f"✅ Added ground truth example to dataset\n")
-    print(f"📊 Ground Truth Summary:")
-    print(f"   • Critical issues: {ground_truth['outputs']['total_critical']}")
-    print(f"   • Major issues: {ground_truth['outputs']['total_major']}")
-    print(f"   • Total issues: {ground_truth['outputs']['total_issues']}")
-    print(f"   • Average freshness: {ground_truth['outputs']['freshness_score']}%")
-    print(f"   • Effort to fix: {ground_truth['outputs']['estimated_effort_hours']}h\n")
-    
-    print(f"✅ Dataset ready at: https://smith.langchain.com/o/datasets/{dataset.id}")
-    print(f"\nNow run evaluation:")
-    print(f"   uv run eval/eval_run.py --project-path /path/to/project\n")
+
+    print("Added ground truth example\n")
+    print("Summary:")
+    print("   • Critical:", ground_truth["outputs"]["summary"]["critical"])
+    print("   • Major:", ground_truth["outputs"]["summary"]["major"])
+    print("   • Total:", ground_truth["outputs"]["summary"]["total_issues"])
+    print("   • Estimated effort:", ground_truth["outputs"]["estimated_hours"], "hours\n")
+
+    print(f"Dataset ready at: https://smith.langchain.com/o/datasets/{dataset.id}")
+
 
 if __name__ == "__main__":
     create_dataset()
