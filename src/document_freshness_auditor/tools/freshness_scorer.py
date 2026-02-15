@@ -13,7 +13,8 @@ def freshness_scorer(
     completeness: float,
     mismatch_clarity: float,
     code_complexity: float,
-    doc_structure_quality: float
+    doc_structure_quality: float,
+    **kwargs: Any
 ) -> Dict[str, Any]:
     """
     Compute weighted freshness score , severity and confidence level based on multiple factors.

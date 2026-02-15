@@ -23,15 +23,7 @@ class DocumentFreshnessAuditor():
     agents: List[BaseAgent]
     tasks: List[Task]
 
-    def __init__(self):
-        self.llm = LLM(
-            model=os.getenv("MODEL_NAME", "llama3.1:8b"),
-            base_url=os.getenv("API_BASE")
-        )
-        self.fix_llm = LLM(
-            model=os.getenv("FIX_MODEL_NAME", "gemini-3-flash-preview:cloud"),
-            base_url=os.getenv("API_BASE")
-        )
+
 
     @agent
     def documentation_auditor(self) -> Agent:
@@ -46,7 +38,6 @@ class DocumentFreshnessAuditor():
                 SrsParserTool(),
                 GitAnalyzerTool()
             ],
-            llm=self.llm,
             verbose=True
         )
 
@@ -54,7 +45,6 @@ class DocumentFreshnessAuditor():
     def freshness_scorer(self) -> Agent:
         return Agent(
             config=self.agents_config['freshness_scorer'],
-            llm=self.llm,
             verbose=True,
             tools=[freshness_scorer]
         )
@@ -63,7 +53,6 @@ class DocumentFreshnessAuditor():
     def fix_suggester(self) -> Agent:
         return Agent(
             config=self.agents_config['fix_suggester'],
-            llm=self.fix_llm,
             verbose=True,
             tools=[ReadFileTool(), DiffGeneratorTool()]
         )
@@ -128,4 +117,5 @@ class DocumentFreshnessAuditor():
             tasks=self.tasks,
             process=Process.sequential,
             verbose=True,
+            human_input=False
         )
