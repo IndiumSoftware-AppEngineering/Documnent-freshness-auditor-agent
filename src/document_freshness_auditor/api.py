@@ -1,4 +1,6 @@
 import os
+import re
+import json
 import warnings
 import threading
 from datetime import datetime
@@ -120,20 +122,85 @@ class FullReportOut(BaseModel):
     files: list[FileReportOut] = []
 
 
+def _try_extract_json_array(text: str) -> str:
+    """Try to extract a JSON array of file-analysis dicts from raw text."""
+    if not text or not text.strip():
+        return ""
+
+    text = text.strip()
+
+    # Try direct parse
+    candidates: list[str] = [text]
+
+    # Try fenced code block
+    fenced = re.search(r"```(?:json)?\s*(\[.*?\])\s*```", text, re.DOTALL | re.IGNORECASE)
+    if fenced:
+        candidates.insert(0, fenced.group(1).strip())
+
+    # Try bracket extraction (outermost [...])
+    bracket = re.search(r"\[.*\]", text, re.DOTALL)
+    if bracket:
+        candidates.append(bracket.group(0).strip())
+
+    for candidate in candidates:
+        try:
+            data = json.loads(candidate)
+        except Exception:
+            continue
+        if not isinstance(data, list) or not data:
+            continue
+        # Check it looks like analysis output
+        looks_right = any(
+            isinstance(item, dict)
+            and any(k in item for k in ("file_path", "freshness_score", "issues", "severity"))
+            for item in data
+        )
+        if looks_right:
+            return json.dumps(data, ensure_ascii=False)
+
+    return ""
+
+
 def grab_outputs(result):
     analysis_json = ""
     audit_raw = ""
+    all_candidates: list[str] = []
+
     if hasattr(result, "tasks_output") and result.tasks_output:
-        for task_out in result.tasks_output:
+        for i, task_out in enumerate(result.tasks_output):
             name = (getattr(task_out, "name", "") or "").lower()
             raw = getattr(task_out, "raw", "") or ""
+            desc = (getattr(task_out, "description", "") or "")[:80]
+            print(f"[grab_outputs] task #{i} name={name!r} desc={desc!r} raw_len={len(raw)}")
+
+            parsed = _try_extract_json_array(raw)
+            if parsed:
+                all_candidates.append(parsed)
+                print(f"[grab_outputs]   -> found valid JSON array in task #{i}")
+
             if "scorer" in name or "freshness" in name:
-                analysis_json = raw
+                if parsed:
+                    analysis_json = parsed
+                    print(f"[grab_outputs]   -> matched as scorer task")
             elif any(k in name for k in ("suggest", "suggestion", "fix", "recommend", "fixer")):
-                if not analysis_json and raw:
-                    analysis_json = raw
+                if not analysis_json and parsed:
+                    analysis_json = parsed
             elif "audit" in name:
                 audit_raw = raw
+
+    # Fallback: if no name matched, use any valid JSON array we found
+    if not analysis_json and all_candidates:
+        analysis_json = all_candidates[0]
+        print(f"[grab_outputs] using fallback candidate (first valid JSON array found)")
+
+    # Last resort: check the result's own .raw
+    if not analysis_json and hasattr(result, "raw"):
+        parsed = _try_extract_json_array(result.raw or "")
+        if parsed:
+            analysis_json = parsed
+            print(f"[grab_outputs] extracted from result.raw")
+
+    print(f"[grab_outputs] final analysis_json length={len(analysis_json)}, audit_raw length={len(audit_raw)}")
     return analysis_json, audit_raw
 
 
@@ -156,6 +223,14 @@ def run_crew_background(report_id, project_path):
         if os.path.exists(report_file):
             with open(report_file, "r") as f:
                 report_md = f.read()
+
+        if not analysis_json:
+            print(f"[API] WARNING: no structured analysis_json captured for {report_id}")
+            # Dump all task outputs for debugging
+            if hasattr(result, "tasks_output") and result.tasks_output:
+                for i, t in enumerate(result.tasks_output):
+                    r = (getattr(t, "raw", "") or "")
+                    print(f"[API] task #{i} raw (first 500 chars): {r[:500]}")
 
         db.finalize_report(report_id, report_md, analysis_json, audit_raw)
         print(f"[API] crew finished for report {report_id}")
