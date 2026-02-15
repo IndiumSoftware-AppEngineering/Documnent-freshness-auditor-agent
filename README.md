@@ -1,60 +1,48 @@
-# DocumentFreshnessAuditor Crew
+# Documentation Freshness Auditor
 
-Welcome to the DocumentFreshnessAuditor Crew project, powered by [crewAI](https://crewai.com). This template is designed to help you set up a multi-agent AI system with ease, leveraging the powerful and flexible framework provided by crewAI. Our goal is to enable your agents to collaborate effectively on complex tasks, maximizing their collective intelligence and capabilities.
+commands to run the project.
 
-## Installation
-
-Ensure you have Python >=3.10 <3.14 installed on your system. This project uses [UV](https://docs.astral.sh/uv/) for dependency management and package handling, offering a seamless setup and execution experience.
-
-First, if you haven't already, install uv:
+## 1) Setup
 
 ```bash
 pip install uv
+uv sync
 ```
 
-Next, navigate to your project directory and install the dependencies:
 
-(Optional) Lock the dependencies and install them by using the CLI command:
-```bash
-crewai install
-```
-### Customizing
+## 2) Configure `.env`
 
-**Add your `OPENAI_API_KEY` into the `.env` file**
+Create a `.env` file in project root:
 
-- Modify `src/document_freshness_auditor/config/agents.yaml` to define your agents
-- Modify `src/document_freshness_auditor/config/tasks.yaml` to define your tasks
-- Modify `src/document_freshness_auditor/crew.py` to add your own logic, tools and specific args
-- Modify `src/document_freshness_auditor/main.py` to add custom inputs for your agents and tasks
+```env
+API_BASE= https://ollama.com/v1
+MODEL_NAME= gemini-3-flash-preview:cloud
+OPENAI_API_KEY="api key here"
+CREWAI_TRACING_ENABLED=true. 
+#MODEL_NAME=rnj-1:8b-cloud
 
-## Running the Project
+OLLAMA_BASE_URL=http://localhost:11434
+# OLLAMA_BASE_URL=https://ollama.com/v1
+OLLAMA_MODEL=llama3.1:8b
+export LANGSMITH_TRACING=true
+export LANGSMITH_API_KEY="key"  
 
-To kickstart your crew of AI agents and begin task execution, run this from the root folder of your project:
-
-```bash
-$ crewai run
 ```
 
-To audit a different repository, pass the path as an argument:
+## 3) Run API
 
 ```bash
-$ uv run run_crew /path/to/your/repository
+uv run serve
 ```
 
-This command initializes the Document-Freshness-auditor Crew, assembling the agents and assigning them tasks as defined in your configuration.
+## 4) Run Crew (CLI)
 
-This example, unmodified, will run the create a `report.md` file with the output of a research on LLMs in the root folder.
+```bash
+uv run run_crew /path/to/project
+```
 
-## Understanding Your Crew
+## 5) Run Evals
 
-The Document-Freshness-auditor Crew is composed of multiple AI agents, each with unique roles, goals, and tools. These agents collaborate on a series of tasks, defined in `config/tasks.yaml`, leveraging their collective skills to achieve complex objectives. The `config/agents.yaml` file outlines the capabilities and configurations of each agent in your crew.
-
-## Support
-
-For support, questions, or feedback regarding the DocumentFreshnessAuditor Crew or crewAI.
-- Visit our [documentation](https://docs.crewai.com)
-- Reach out to us through our [GitHub repository](https://github.com/joaomdmoura/crewai)
-- [Join our Discord](https://discord.com/invite/X4JWnZnxPb)
-- [Chat with our docs](https://chatg.pt/DWjSBZn)
-
-Let's create wonders together with the power and simplicity of crewAI.
+```bash
+uv run eval/eval_run.py -p <project path>
+```
