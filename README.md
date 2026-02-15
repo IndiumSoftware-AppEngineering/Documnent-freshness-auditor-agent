@@ -36,7 +36,7 @@ uv run serve
 ```
 
 ## 4) Run Crew (CLI)
-
+`
 ```bash
 uv run run_crew /path/to/project
 ```

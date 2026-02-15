@@ -53,6 +53,80 @@ def init_db():
     conn.close()
 
 
+def _extract_issue_text(iss):
+    """Extract the issue description from a dict, trying many possible key names."""
+    if not isinstance(iss, dict):
+        return str(iss) if iss else ""
+    for key in (
+        "issue_name", "description", "issue", "problem", "finding", "title",
+        "message", "detail", "text", "name", "summary", "msg",
+    ):
+        val = iss.get(key)
+        if val and isinstance(val, str) and val.strip():
+            return val.strip()
+    # fallback: join all string values in the dict
+    parts = [str(v) for v in iss.values() if isinstance(v, str) and v.strip()]
+    return "; ".join(parts) if parts else str(iss)
+
+
+def _extract_field(iss, *keys):
+    """Return the first non-empty string value for any of the given keys."""
+    if not isinstance(iss, dict):
+        return ""
+    for key in keys:
+        val = iss.get(key)
+        if val and isinstance(val, str) and val.strip():
+            return val.strip()
+    return ""
+
+
+def _to_float(v, default=0.0):
+    try:
+        return float(v)
+    except Exception:
+        return default
+
+
+def _get_file_path(item):
+    """Extract file path from a dict trying multiple key names."""
+    for key in ("file_path", "file", "path"):
+        val = item.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return ""
+
+
+def _build_recommendations(issues):
+    """Build concise, actionable recommendation strings from issue dicts."""
+    recs = []
+    for iss in issues:
+        if not isinstance(iss, dict):
+            continue
+        issue_text = iss.get("issue", "").strip()
+        actual = iss.get("actual", "").strip()
+        location = iss.get("location", "").strip()
+        priority = iss.get("fix_priority", "").strip()
+        severity = iss.get("severity", "").strip()
+
+        # Build: "Fix <issue> at <location>: update docs to match <actual>. (Priority: High)"
+        if not issue_text:
+            continue
+        rec = f"Fix: {issue_text}"
+        if location:
+            rec += f" (at {location})"
+        if actual:
+            rec += f" — update docs to match: {actual}"
+        tag_parts = []
+        if priority:
+            tag_parts.append(priority)
+        if severity:
+            tag_parts.append(severity)
+        if tag_parts:
+            rec += f"  [{', '.join(tag_parts)}]"
+        recs.append(rec)
+    return recs
+
+
 def parse_analysis(raw_str):
     empty = {
         "total_files": 0,
@@ -80,74 +154,207 @@ def parse_analysis(raw_str):
             except json.JSONDecodeError:
                 pass
 
-    if not isinstance(data, list):
+    if not isinstance(data, list) or not data:
         return empty
 
-    total = len(data)
+    severity_rank = {"minor": 1, "major": 2, "critical": 3}
+
+    # Detect shape: scorer output has freshness_score per item
+    has_scored_shape = any(
+        isinstance(item, dict)
+        and _get_file_path(item)
+        and "freshness_score" in item
+        for item in data
+    )
+
+    if has_scored_shape:
+        # --- Mode A: scorer JSON (per-file freshness objects) ---
+        grouped = {}
+
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            file_path = _get_file_path(item)
+            if not file_path:
+                continue
+
+            sev = str(item.get("severity", "minor")).lower()
+            if sev not in severity_rank:
+                sev = "minor"
+
+            issues = item.get("issues", []) or []
+            if not isinstance(issues, list):
+                issues = []
+
+            numbered = []
+            for i, iss in enumerate(issues, 1):
+                if isinstance(iss, str):
+                    iss = {"description": iss}
+                if not isinstance(iss, dict):
+                    continue
+                numbered.append({
+                    "number": i,
+                    "issue": _extract_issue_text(iss),
+                    "location": _extract_field(iss, "location", "line"),
+                    "impact": _extract_field(iss, "impact", "why_it_matters", "reason"),
+                    "expected": _extract_field(iss, "expected", "what_docs_say", "documented"),
+                    "actual": _extract_field(iss, "actual", "what_code_does", "reality"),
+                    "fix_priority": _extract_field(iss, "fix_priority", "priority"),
+                    "severity": _extract_field(iss, "severity"),
+                })
+
+            recs = item.get("recommendations", []) or []
+            if isinstance(recs, str):
+                recs = [recs]
+            elif not isinstance(recs, list):
+                recs = []
+
+            # Auto-generate recommendations from issues when none provided
+            if not recs and numbered:
+                recs = _build_recommendations(numbered)
+
+            score = _to_float(item.get("freshness_score", 0.0))
+            confidence = _to_float(item.get("confidence", 0.0))
+            doc_type = _extract_field(item, "doc_type", "type", "category", "kind")
+            breakdown = item.get("score_breakdown") or item.get("components") or {}
+            if not isinstance(breakdown, dict):
+                breakdown = {}
+
+            entry = grouped.get(file_path)
+            if not entry:
+                grouped[file_path] = {
+                    "file": file_path,
+                    "doc_type": doc_type,
+                    "severity": sev,
+                    "freshness_score": score,
+                    "confidence": confidence,
+                    "score_breakdown": breakdown,
+                    "issues": numbered,
+                    "recommendations": recs,
+                }
+            else:
+                if severity_rank.get(sev, 1) > severity_rank.get(entry["severity"], 1):
+                    entry["severity"] = sev
+                if score > 0:
+                    entry["freshness_score"] = score
+                if confidence > 0:
+                    entry["confidence"] = confidence
+                if doc_type and not entry.get("doc_type"):
+                    entry["doc_type"] = doc_type
+                if breakdown and not entry.get("score_breakdown"):
+                    entry["score_breakdown"] = breakdown
+                if numbered:
+                    start = len(entry["issues"])
+                    for idx, v in enumerate(numbered, start + 1):
+                        v["number"] = idx
+                        entry["issues"].append(v)
+                if recs:
+                    entry["recommendations"].extend(
+                        [r for r in recs if r not in entry["recommendations"]]
+                    )
+
+        files = list(grouped.values())
+
+    else:
+        # --- Mode B: audit-finding list (one row per issue) ---
+        from collections import defaultdict
+
+        grouped = defaultdict(list)
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            file_path = _get_file_path(item)
+            if not file_path:
+                continue
+            grouped[file_path].append(item)
+
+        files = []
+        for file_path, rows in grouped.items():
+            by_sev = {"critical": 0, "major": 0, "minor": 0}
+            doc_type = ""
+            issue_rows = []
+
+            for r in rows:
+                sev = str(r.get("severity", "minor")).lower()
+                if sev not in by_sev:
+                    sev = "minor"
+                by_sev[sev] += 1
+
+                if not doc_type:
+                    doc_type = _extract_field(r, "doc_type", "type", "category", "kind")
+
+                location = str(r.get("location", "") or "")
+                if not location:
+                    line = r.get("line")
+                    if isinstance(line, int):
+                        location = f"Line {line}"
+
+                issue_rows.append({
+                    "number": 0,
+                    "issue": _extract_issue_text(r),
+                    "location": location,
+                    "impact": _extract_field(r, "impact", "why_it_matters", "reason"),
+                    "expected": _extract_field(r, "expected", "what_docs_say", "documented"),
+                    "actual": _extract_field(r, "actual", "what_code_does", "reality"),
+                    "fix_priority": _extract_field(r, "fix_priority", "priority"),
+                    "severity": _extract_field(r, "severity"),
+                })
+
+            if by_sev["critical"] > 0:
+                file_sev = "critical"
+            elif by_sev["major"] > 0:
+                file_sev = "major"
+            else:
+                file_sev = "minor"
+
+            score = max(0.0, 100.0 - (
+                by_sev["critical"] * 35.0
+                + by_sev["major"] * 10.0
+                + by_sev["minor"] * 4.0
+            ))
+
+            for i, it in enumerate(issue_rows, 1):
+                it["number"] = i
+
+            # Auto-generate recommendations from issues
+            recs = _build_recommendations(issue_rows)
+
+            files.append({
+                "file": file_path,
+                "doc_type": doc_type,
+                "severity": file_sev,
+                "freshness_score": round(score, 1),
+                "confidence": 0.7,
+                "score_breakdown": {},
+                "issues": issue_rows,
+                "recommendations": recs,
+            })
+
+    if not files:
+        return empty
+
     crit = 0
     major = 0
     minor = 0
     score_total = 0.0
-    files = []
 
-    for item in data:
-        if not isinstance(item, dict):
-            continue
-
-        sev = str(item.get("severity", "minor")).lower()
-        issues = item.get("issues", []) or []
-
+    for f in files:
+        issue_count = len(f.get("issues", []))
+        sev = f.get("severity", "minor")
         if sev == "critical":
-            crit += len(issues) if issues else 1
+            crit += issue_count
         elif sev == "major":
-            major += len(issues) if issues else 1
+            major += issue_count
         else:
-            minor += len(issues) if issues else 1
+            minor += issue_count
+        score_total += _to_float(f.get("freshness_score", 0.0))
 
-        score = float(item.get("freshness_score", 0))
-        score_total += score
-
-        numbered = []
-        for i, iss in enumerate(issues, 1):
-            numbered.append({
-                "number": i,
-                "issue": iss.get("description", ""),
-                "location": iss.get("location", ""),
-                "impact": iss.get("impact", ""),
-                "expected": iss.get("expected", ""),
-                "actual": iss.get("actual", ""),
-            })
-
-        recs = item.get("recommendations", []) or []
-        if isinstance(recs, str):
-            recs = recs.strip()
-            if recs.startswith("[") and recs.endswith("]"):
-                try:
-                    parsed = json.loads(recs)
-                    recs = parsed if isinstance(parsed, list) else [str(parsed)]
-                except Exception:
-                    recs = [recs]
-            else:
-                recs = [recs]
-        elif not isinstance(recs, list):
-            recs = []
-
-        files.append({
-            "file": item.get("file_path", ""),
-            "doc_type": item.get("doc_type", ""),
-            "severity": sev,
-            "freshness_score": score,
-            "confidence": float(item.get("confidence", 0)),
-            "score_breakdown": item.get("score_breakdown", {}),
-            "issues": numbered,
-            "recommendations": recs,
-        })
-
+    total = len(files)
     avg = round(score_total / total, 2) if total else 0.0
 
-    if crit >= major and crit >= minor:
+    if crit > 0 and crit >= major and crit >= minor:
         overall = "critical"
-    elif major >= minor:
+    elif major > 0 and major >= minor:
         overall = "major"
     else:
         overall = "minor"
@@ -411,9 +618,11 @@ def get_full_report(report_id):
     d = dict(row)
     parsed = parse_analysis(d.get("analysis_json", "") or "")
 
-    if parsed["critical_issues"] >= parsed["major_issues"] and parsed["critical_issues"] >= parsed["minor_issues"]:
+    if parsed["total_files"] == 0:
+        health = "No structured issue data available"
+    elif parsed["critical_issues"] > 0 and parsed["critical_issues"] >= parsed["major_issues"] and parsed["critical_issues"] >= parsed["minor_issues"]:
         health = "Critical – immediate remediation required"
-    elif parsed["major_issues"] >= parsed["minor_issues"]:
+    elif parsed["major_issues"] > 0 and parsed["major_issues"] >= parsed["minor_issues"]:
         health = "Major – should be addressed soon"
     else:
         health = "Minor – low priority improvements"
