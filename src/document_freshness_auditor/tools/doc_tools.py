@@ -4,10 +4,53 @@ import re
 import yaml
 import subprocess
 import difflib
-from pathlib import Path
+import locale
+import sys
 from datetime import datetime
 from typing import Dict, List, Set,Optional
 from crewai.tools import BaseTool
+
+
+def _safe_read_text(path: str) -> str:
+    """Read a file robustly: try UTF-8 (and BOM), then cp1252, then fallback.
+
+    This prevents the Windows 'charmap' codec can't decode byte errors by
+    decoding bytes explicitly and using a replacement strategy as a last resort.
+    """
+    with open(path, "rb") as bf:
+        data = bf.read()
+
+    # build a prioritized list of encodings to try
+    encodings = ["utf-8", "utf-8-sig"]
+
+    # include the system preferred encoding if it isn't already present
+    try:
+        pref = locale.getpreferredencoding(False) or ""
+    except Exception:
+        pref = ""
+    if pref and pref.lower() not in (e.lower() for e in encodings):
+        encodings.append(pref)
+
+    # on Windows, try the 'mbcs' codec which maps to the ANSI code page
+    if sys.platform.startswith("win") and "mbcs" not in encodings:
+        encodings.append("mbcs")
+
+    # common Windows fallback
+    if "cp1252" not in encodings:
+        encodings.append("cp1252")
+
+    # latin-1 will never fail (direct byte->unicode mapping)
+    if "latin-1" not in encodings:
+        encodings.append("latin-1")
+
+    for enc in encodings:
+        try:
+            return data.decode(enc)
+        except Exception:
+            continue
+
+    # final fallback: decode as utf-8 with replacement to avoid exceptions
+    return data.decode("utf-8", errors="replace")
 
 class DocstringSignatureTool(BaseTool):
     name: str = "Docstring Signature Auditor"
@@ -25,6 +68,17 @@ class DocstringSignatureTool(BaseTool):
 
         issues = []
 
+    def _run(self, file_path: str) -> str:
+        if not os.path.exists(file_path):
+            return f"Error: File {file_path} not found."
+
+        try:
+            src = _safe_read_text(file_path)
+            tree = ast.parse(src)
+        except Exception as exc:
+            return f"Error parsing {file_path}: {exc}"
+        
+        results = []
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
                 issue = self._check_function(node)
@@ -195,9 +249,9 @@ class CodeCommentTool(BaseTool):
     def _run(self, file_path: str) -> str:
         if not os.path.exists(file_path):
             return f"Error: File {file_path} not found."
-        
-        with open(file_path, "r") as f:
-            lines = f.readlines()
+
+        content = _safe_read_text(file_path)
+        lines = content.splitlines(keepends=True)
 
         comments_with_context = []
 
@@ -307,8 +361,7 @@ class SrsParserTool(BaseTool):
         results = []
         req_pattern = re.compile(r"\b([A-Z]{2,}-\d+)\b")
         for md_file in md_files:
-            with open(md_file, "r") as f:
-                content = f.read()
+            content = _safe_read_text(md_file)
             headings = [line.strip() for line in content.splitlines() if line.strip().startswith("#")]
             req_ids = list(dict.fromkeys(req_pattern.findall(content)))
             summary = content[:400].strip().replace("\n", " ")
@@ -367,3 +420,38 @@ class GitAnalyzerTool(BaseTool):
                 return current
             current = os.path.dirname(current)
         return ""
+
+
+class ApplyFixTool(BaseTool):
+    name: str = "apply_fix"
+    description: str = (
+        "Writes the corrected documentation content to a file, applying the fix. "
+        "Use this tool to actually update documentation files after generating a diff."
+    )
+
+    def _run(self, file_path: str, new_content: str) -> str:
+        """Write new_content to file_path, creating dirs if needed."""
+        if not file_path:
+            return "Error: file_path is required."
+        try:
+            os.makedirs(os.path.dirname(file_path) or ".", exist_ok=True)
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(new_content)
+            return f"Successfully wrote {len(new_content)} bytes to {file_path}"
+        except Exception as exc:
+            return f"Error writing to {file_path}: {exc}"
+
+
+class ReadFileTool(BaseTool):
+    name: str = "read_file"
+    description: str = "Reads the entire content of a file and returns it as a string."
+
+    def _run(self, file_path: str) -> str:
+        if not file_path:
+            return "Error: file_path is required."
+        if not os.path.exists(file_path):
+            return f"Error: File {file_path} not found."
+        try:
+            return _safe_read_text(file_path)
+        except Exception as exc:
+            return f"Error reading {file_path}: {exc}"

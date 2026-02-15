@@ -4,20 +4,21 @@ from crewai.agents.agent_builder.base_agent import BaseAgent
 from typing import List
 import os
 from document_freshness_auditor.tools.doc_tools import (
-    DocstringSignatureTool, 
-    ReadmeStructureTool, 
-    ApiImplementationTool, 
+    DocstringSignatureTool,
+    ReadmeStructureTool,
+    ApiImplementationTool,
     CodeCommentTool,
     ListFilesTool,
     SrsParserTool,
     GitAnalyzerTool,
-    DiffGeneratorTool
+    DiffGeneratorTool,
+    ReadFileTool
 )
 from document_freshness_auditor.tools.freshness_scorer import freshness_scorer
 
+
 @CrewBase
 class DocumentFreshnessAuditor():
-    """DocumentFreshnessAuditor crew"""
 
     agents: List[BaseAgent]
     tasks: List[Task]
@@ -29,9 +30,9 @@ class DocumentFreshnessAuditor():
         return Agent(
             config=self.agents_config['documentation_auditor'],
             tools=[
-                DocstringSignatureTool(), 
-                ReadmeStructureTool(), 
-                ApiImplementationTool(), 
+                DocstringSignatureTool(),
+                ReadmeStructureTool(),
+                ApiImplementationTool(),
                 CodeCommentTool(),
                 ListFilesTool(),
                 SrsParserTool(),
@@ -53,7 +54,7 @@ class DocumentFreshnessAuditor():
         return Agent(
             config=self.agents_config['fix_suggester'],
             verbose=True,
-            tools=[DiffGeneratorTool()]
+            tools=[ReadFileTool(), DiffGeneratorTool()]
         )
 
     @task
@@ -73,6 +74,40 @@ class DocumentFreshnessAuditor():
         return Task(
             config=self.tasks_config['suggestion_task'],
             output_file='freshness_audit_report.md'
+        )
+
+    def analysis_only_crew(self) -> Crew:
+        return Crew(
+            agents=[self.documentation_auditor(), self.freshness_scorer()],
+            tasks=[self.audit_task(), self.freshness_scorer_task()],
+            process=Process.sequential,
+            verbose=True,
+        )
+
+    def fix_only_crew(self) -> Crew:
+        suggestion = Task(
+            config=self.tasks_config['suggestion_task'],
+            human_input=False,
+            output_file='freshness_audit_report.md'
+        )
+        return Crew(
+            agents=[self.fix_suggester()],
+            tasks=[suggestion],
+            process=Process.sequential,
+            verbose=True,
+        )
+
+    def hitl_crew(self) -> Crew:
+        suggestion = Task(
+            config=self.tasks_config['suggestion_task'],
+            human_input=True,
+            output_file='freshness_audit_report.md'
+        )
+        return Crew(
+            agents=[self.documentation_auditor(), self.freshness_scorer(), self.fix_suggester()],
+            tasks=[self.audit_task(), self.freshness_scorer_task(), suggestion],
+            process=Process.sequential,
+            verbose=True,
         )
 
     @crew

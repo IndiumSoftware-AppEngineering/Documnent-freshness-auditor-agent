@@ -8,6 +8,9 @@ dependencies = [
     "crewai[tools]==1.9.2",
     "langchain-community>=0.4.1",
     "python-dotenv",
+    "python-dotenv",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0"
 ]
 
 [project.scripts]
@@ -17,6 +20,7 @@ train = "document_freshness_auditor.main:train"
 replay = "document_freshness_auditor.main:replay"
 test = "document_freshness_auditor.main:test"
 run_with_trigger = "document_freshness_auditor.main:run_with_trigger"
+serve = "document_freshness_auditor.api:serve"
 
 [build-system]
 requires = ["hatchling"]

@@ -84,26 +84,68 @@ freshness_scorer_task:
 
 suggestion_task:
   description: >
-    Generate fix suggestions with diffs and before/after examples.
-    
-    1. For each CRITICAL issue: Show current docstring/doc → corrected version
-    2. For each MAJOR issue: Same - with explanation
-    3. For each MINOR issue: Brief fix suggestion
-    
-    Use unified diff format (@@, +, -) for clarity.
-    
-    4. Create scorecard table:
-       | File | Type | Score | Severity | Issues |
-       
-    5. Produce markdown report:
-       - Executive Summary
-       - File-by-File Scorecard (table)
-       - Detailed Analysis (before/after for each critical/major issue)
-       - Recommendations (prioritized)
-    
-    Make output copy-paste ready for developers.
+    You are generating FIX SUGGESTIONS ONLY for documentation issues in {project_path}.
+
+    IMPORTANT:
+    - Do not edit repository files.
+    - Do not call apply_fix.
+    - Provide before/after snippets and unified diffs as suggestions only.
+
+    OUTPUT STABILITY (STRICT):
+    - Return the exact same report structure on every run.
+    - Use this exact heading sequence only:
+      1) # Documentation Freshness Audit Report
+      2) ## Executive Summary
+      3) ## File-by-File Scorecard
+      4) ## File-by-File Analysis
+      5) ## Recommendations
+      6) ---
+      7) Report generated: <ISO-8601 UTC timestamp>
+    - Do not add extra top-level sections.
+    - Do not omit any required section.
+    - If there are no issues in a file, still include that file with "No issues found" and a preventive recommendation.
+
+    LENGTH REQUIREMENT:
+    - Make the report detailed enough for ~10 minutes of reading.
+    - Target 1400-2200 words.
+    - Executive Summary must include 5-8 bullets.
+    - For each file include at least:
+      - 2 issue bullets (or explicit no-issue note)
+      - 3 reasoning bullets
+      - 2 recommendations
+    - Overall Recommendations section must contain at least 8 numbered items.
+
+    Produce a clean Markdown report in this exact structure:
+
+    # Documentation Freshness Audit Report
+
+    ## Executive Summary
+    - Project files analyzed: **<N>**
+    - Average freshness score: **<avg>**
+    - Severity counts: critical **<n>**, major **<n>**, minor **<n>**
+
+    ## File-by-File Scorecard
+    | File | Doc Type | Freshness | Severity | Confidence |
+    |---|---:|---:|---:|---:|
+
+    ## File-by-File Analysis
+    For each file include:
+    - doc type, freshness score, severity, confidence
+    - issue list (description, location, expected, actual, impact)
+    - suggested fix before/after snippets
+    - unified diff
+    - short reasoning and recommendation
+
+    End with:
+    ---
+    Report generated: <ISO-8601 UTC timestamp>
   expected_output: >
-    Markdown report: "Documentation Freshness Audit Report" with executive summary, scorecard table, before/after fixes with diffs, and action plan
+    A clean Markdown report titled "# Documentation Freshness Audit Report" containing:
+    an executive summary, a file-by-file scorecard table, detailed analysis with
+    suggested before/after snippets and unified diffs, and recommendations.
+    The output must follow a deterministic heading order and be long-form
+    (target 1400-2200 words, approximately 10 minutes reading time).
+    No project files are modified.
   agent: fix_suggester
   context:
     - audit_task
