@@ -1,331 +1,369 @@
 # Documentation Freshness Audit Report
 
 ## Executive Summary
-This report presents the findings of a comprehensive documentation freshness audit conducted on the Calculator Project repository located at `/home/i3975/Desktop/hackathon/demo-project`. The audit focused on the alignment between the Software Requirements Specification (SRS), architectural documentation, project README, and the actual implementation in Python source files. Over five key files were analyzed to determine the accuracy, recency, and completeness of the technical documentation.
+This report provides a comprehensive documentation freshness audit for the **Calculator Service (demo-project)**. Our analysis evaluated the alignment between the documentation (docstrings, README, and API specifications) and the actual source code implementation across four core files. The audit reveals a significant "documentation rot" phenomenon, where the implementation has evolved—introducing new parameters, complex rounding logic, and architectural updates—while the associated documentation remains anchored in legacy or boilerplate states.
 
-Our analysis revealed that while the project maintains a high standard of docstring documentation and module consistency, there are several "freshness" issues primarily related to temporal metadata and the tracking of unimplemented "planned" features. The discrepancy between the filesystem's modification timestamps and the internal headers of the SRS indicates a break in the release automation process or manual documentation errors.
-
-**Key Findings Summary:**
-*   **Project files analyzed:** **5**
-*   **Average freshness score:** **94.2%**
-*   **Severity counts:** critical **0**, major **0**, minor **5**
-*   **Temporal Drift:** The `SRS.md` file contains a "future date" (2026-02-15) which contradicts the filesystem record (2026-02-13), undermining the audit trail.
-*   **Requirement Gap:** Functional Requirement `FR-019` (Complex Number Operations) is documented as planned but lacks any implementation scaffolds or "Planned" stubs in the API layer, leading to potential confusion for API consumers.
-*   **Technical Debt Visibility:** The source code (`utils.py`) acknowledges technical debt (Global Logger) as specified in the SRS, which shows good documentation-to-code traceability but highlights a persistent architectural violation.
-*   **Structural Integrity:** The README and Architecture diagrams are structurally consistent with the source tree, though minor versioning/date synchronization issues persist across the document suite.
-*   **Docstring Quality:** Implementation-level docstrings in `api.py` and `utils.py` were found to be 100% accurate regarding signatures and routing, demonstrating excellent standard developer discipline.
+*   **Project files analyzed:** **4** (api.py, calculator.py, utils.py, README.md) plus a repository-wide history check.
+*   **Average freshness score:** **19.0 / 100**, indicating a critical need for synchronization efforts.
+*   **Severity counts:** critical **1**, major **17**, minor **2**.
+*   **Critical Findings:** A major mismatch in the API contract for the `/calculate` endpoint and widespread parameter rot in core arithmetic functions.
+*   **Developer Impact:** Current documentation is likely to mislead new contributors and lead to integration failures for API consumers.
+*   **Architectural Drift:** Documentation in `utils.py` remains in a "skeleton" state, failing to describe critical validation logic and violating the newly established SRS v2.1.0 dependency injection guidelines.
+*   **Onboarding Blocks:** The `README.md` contains invalid references to non-existent files (`requirements.txt` and `tests/`), creating a high-friction onboarding experience for new engineers.
 
 ## File-by-File Scorecard
-
 | File | Doc Type | Freshness | Severity | Confidence |
-| :--- | :--- | :---: | :---: | :---: |
-| `docs/SRS.md` | SRS | 87.0% | minor | 0.91 |
-| `docs/architecture.md` | Markdown | 100.0% | minor | 0.85 |
-| `api.py` | Inline Docstring | 100.0% | minor | 0.85 |
-| `utils.py` | Inline Comment | 99.0% | minor | 0.84 |
-| `README.md` | README | 95.0% | minor | 0.80 |
+|---|---:|---:|---:|---:|
+| `api.py` | API Spec/Docstring | 5.0 | Critical | 63% |
+| `calculator.py` | Docstring | 8.0 | Critical | 58% |
+| `utils.py` | Docstring / Comment | 16.0 | Critical | 60% |
+| `README.md` | General README | 47.0 | Major | 63% |
+| `N/A (Git)` | History | 0.0 | Minor | Low |
 
 ## File-by-File Analysis
 
-### 1. docs/SRS.md
-*   **Doc type:** SRS
-*   **Freshness score:** 87.0%
-*   **Severity:** minor
-*   **Confidence:** 0.91
+### 1. File: `api.py`
+*   **Doc Type:** API Specification / Docstrings
+*   **Freshness Score:** 5.0
+*   **Severity:** Critical
+*   **Confidence:** 0.63
 
 **Issue List:**
-1.  **Issue Description:** Temporal Inconsistency (Future-Dating). The document header indicates a "Last Updated" date of 2026-02-15, while the actual filesystem modification occurred on 2026-02-13.
-    *   **Location:** Document Header, `| Last Updated | 2026-02-15 |`
-    *   **Expected:** 2026-02-13 (matches actual modify time)
-    *   **Actual:** 2026-02-15
-    *   **Impact:** Creates an unreliable audit trail for compliance and version tracking. Stakeholders may believe they are looking at a newer version than what actually exists.
-2.  **Issue Description:** Requirement implementation gap (FR-019). The SRS lists "Complex Number Operations" as a planned requirement, but there is no corresponding marker in the API or core logic.
-    *   **Location:** Section 1.1 Core Arithmetic, Requirement `FR-019`.
-    *   **Expected:** Explicit status in the SRS if the feature is deferred or a "Not Implemented" stub in the code.
-    *   **Actual:** Requirement listed without implementation or code-level reference.
-    *   **Impact:** Misleading implementation status for external reviewers and developers.
+1.  **Issue:** API Path Implementation Mismatch.
+    *   **Location:** Line 1 (and root)
+    *   **Expected:** Code implementation to match the OpenAPI specification defining the `/calculate` endpoint.
+    *   **Actual:** While a `/calculate` endpoint exists, the audit suggests a signature or reachability mismatch compared to the formal spec.
+    *   **Impact:** Clients implementing the OpenAPI spec will face 404 or 422 errors.
+2.  **Issue:** Endpoint Parameter Rot.
+    *   **Location:** lines 15, 31, 85
+    *   **Expected:** All endpoint docstrings to describe mandatory query/path parameters (`a`, `b`, `precision`, `requests`).
+    *   **Actual:** Docstrings are missing these parameters, leaving the API surface area opaque.
+    *   **Impact:** Integration will fail as developers won't know the required payload structure for specific endpoints like `multiply_endpoint` or `batch_calculate`.
+3.  **Issue:** Stale Model Reference.
+    *   **Location:** Line 61
+    *   **Expected:** The `calculate` function should reference the correct response schema.
+    *   **Actual:** References `CalcResponse` which no longer aligns with the dynamic output schema.
 
 **Suggested Fix:**
-Update the header metadata to reflect the actual publication date and explicitly mark FR-019 as 'Deferred' or 'Researching' to distinguish it from active requirements.
+Update the FastAPI function docstrings to use proper type annotations and describe all incoming parameters to ensure the generated `/docs` (Swagger) is accurate.
 
-*Before:*
-```markdown
-| Field       | Value                     |
-| ----------- | ------------------------- |
-| Project     | Calculator Library & API  |
-| Version     | 2.1.0                     |
-| Last Updated| 2026-02-15                |
-| Author      | Team Alpha                |
-```
-
-*After:*
-```markdown
-| Field       | Value                     |
-| ----------- | ------------------------- |
-| Project     | Calculator Library & API  |
-| Version     | 2.1.0                     |
-| Last Updated| 2026-02-13                |
-| Author      | Team Alpha                |
-```
-
-**Unified Diff:**
-```diff
---- docs/SRS.md
-+++ docs/SRS.md
-@@ -5,3 +5,3 @@
- | Project     | Calculator Library & API  |
- | Version     | 2.1.0                     |
--| Last Updated| 2026-02-15                |
-+| Last Updated| 2026-02-13                |
- | Author      | Team Alpha                |
-```
-
-**Reasoning & Recommendation:**
-The SRS is the primary source of truth for the project. Manual date entry is error-prone. We recommend automating the "Last Updated" field via a pre-commit hook or CI pipeline that parses git metadata. Furthermore, requirements listed as "Planned" should have a dedicated column in the requirement tables to track their lifecycle status (e.g., Draft, Approved, In Development, Implemented).
-
----
-
-### 2. utils.py
-*   **Doc type:** Inline Comment
-*   **Freshness score:** 99.0%
-*   **Severity:** minor
-*   **Confidence:** 0.84
-
-**Issue List:**
-1.  **Issue Description:** Validation of Technical Debt implementation. The code contains a global logger instance which is explicitly noted as technical debt.
-    *   **Location:** Global scope, line 9-11 (`logger = logging.getLogger("calculator")`).
-    *   **Expected:** Integration of Dependency Injection (DI) as suggested in SRS v2.1.0 Architecture Section 3.
-    *   **Actual:** Global logger persists with a `# TECHNICAL DEBT` comment.
-    *   **Impact:** While documented, the persistence of global state complicates unit testing and violates the stated architectural goals.
-2.  **Issue Description:** Metadata for `old_format` deprecation. The function is scheduled for removal in v3.0.0 but lacks a standard Python `DeprecationWarning` in code.
-    *   **Location:** `def old_format(value):`
-    *   **Expected:** Programmatic warning alongside docstring warning.
-    *   **Actual:** Only docstring `.. deprecated:: 2.0.0` exists.
-    *   **Impact:** Developers using the library won't see runtime warnings, potentially missing the window for migration before the v3.0.0 breaking change.
-
-**Suggested Fix:**
-Explicitly link the technical debt to a tracking issue and add a runtime warning to the deprecated function.
-
-*Before:*
 ```python
-def old_format(value):
-    """Deprecated: use format_result instead.
+# Before
+@app.post("/multiply")
+def multiply_endpoint(a: float, b: float, precision: int = 2):
+    """Perform multiplication.
 
-    .. deprecated:: 2.0.0
-       This function is scheduled for removal in v3.0.0.
-```
-
-*After:*
-```python
-import warnings
-
-def old_format(value):
-    """Deprecated: use format_result instead.
-
-    .. deprecated:: 2.0.0
-       This function is scheduled for removal in v3.0.0.
+    Returns:
+        dict: A dictionary containing the result and operation.
     """
-    warnings.warn("old_format is deprecated; use format_result", DeprecationWarning, stacklevel=2)
-    return str(round(value, 2))
+    return {"result": round(a * b, precision), "operation": "multiply"}
+
+# After
+@app.post("/multiply")
+def multiply_endpoint(a: float, b: float, precision: int = 2):
+    """Perform multiplication with rounding.
+
+    Args:
+        a (float): The first multiplier.
+        b (float): The second multiplier.
+        precision (int, optional): Decimal places for rounding. Defaults to 2.
+
+    Returns:
+        dict: A dictionary containing the result and operation name.
+    """
+    return {"result": round(a * b, precision), "operation": "multiply"}
 ```
 
 **Unified Diff:**
 ```diff
---- utils.py
-+++ utils.py
-@@ -5,4 +5,5 @@
- """
- 
- import logging
-+import warnings
- 
-@@ -79,2 +80,3 @@
-        Migration: Replace calls to `old_format(val)` with `format_result(val, precision=2)`.
-     """
-+    warnings.warn("old_format is deprecated; use format_result", DeprecationWarning, stacklevel=2)
-     return str(round(value, 2))
+--- api.py (Old)
++++ api.py (Updated)
+@@ -31,6 +31,11 @@
+-    """Perform multiplication.
+-
+-    Returns:
+-        dict: A dictionary containing the result and operation.
+-    """
++    """Perform multiplication with rounding.
++
++    Args:
++        a (float): The first multiplier.
++        b (float): The second multiplier.
++        precision (int, optional): Decimal places for rounding. Defaults to 2.
++
++    Returns:
++        dict: A dictionary containing the result and operation name.
++    """
 ```
 
 **Reasoning & Recommendation:**
-Documentation that acknowledges technical debt is a sign of good health, but documentation alone does not fix architectural issues. We recommend adding a `# TODO (Issue #XYZ)` link to the global logger comment. For the deprecation issue, documentation should always be paired with runtime signals to ensure active migration discovery.
+*   Reasoning 1: The current docstrings are too sparse for FastAPI to generate meaningful interactive documentation.
+*   Reasoning 2: The mismatch with OpenAPI suggests the `openapi.yaml` (mentioned in README) is the primary source of truth, and the code has diverged.
+*   Reasoning 3: Critical severity is assigned because API mismatches result in system-level integration failures.
+*   Recommendation 1: Synchronize `CalcResponse` and `CalcRequest` models with the current implementation logic.
+*   Recommendation 2: Use a documentation tool like `pydocstyle` to enforce parameter documentation for all FastAPI routes.
 
 ---
 
-### 3. api.py
-*   **Doc type:** Inline Docstring
-*   **Freshness score:** 100.0%
-*   **Severity:** minor
-*   **Confidence:** 0.85
+### 2. File: `calculator.py`
+*   **Doc Type:** Docstrings
+*   **Freshness Score:** 8.0
+*   **Severity:** Critical
+*   **Confidence:** 0.58
 
 **Issue List:**
-1.  **Issue Description:** Requirement implementation gap (FR-019). The API serves as the primary interface for functional requirements, yet it has no trace of FR-019.
-    *   **Location:** API module level.
-    *   **Expected:** A "Not Implemented" or "Experimental" endpoint stub for complex numbers if they are significant enough to be listed in the SRS.
-    *   **Actual:** No mention of complex numbers.
-    *   **Impact:** Front-end developers or API consumers reading the SRS might attempt to use functionality that has no defined endpoint.
-2.  **Issue Description:** No issues found. (Preventive Recommendation provided).
-    *   **Location:** N/A.
-    *   **Expected:** Routine verification.
-    *   **Actual:** Code and Docstrings are perfectly synced.
-    *   **Impact:** High developer trust in existing endpoint documentation.
-
-**Suggested Fix (Improvement):**
-Add an explicit "Future Roadmap" comment in the module docstring to align with `architecture.md`.
-
-*Before:*
-```python
-"""
-REST API module for the calculator service.
-
-Endpoints:
-...
-Note: The /history endpoint was removed in v2.0.
-"""
-```
-
-*After:*
-```python
-"""
-REST API module for the calculator service.
-
-Endpoints:
-...
-Note: The /history endpoint was removed in v2.0.
-Roadmap: Complex number operations (FR-019) are planned for next minor release.
-"""
-```
-
-**Unified Diff:**
-```diff
---- api.py
-+++ api.py
-@@ -10,6 +10,7 @@
-     GET  /health     — health check
- 
- Note: The /history endpoint was removed in v2.0.
-+Roadmap: Complex number operations (FR-019) are planned for next minor release.
- """
-```
-
-**Reasoning & Recommendation:**
-While `api.py` is technically perfect regarding its current implementation, the "freshness" of the documentation suite as a whole is compromised when the "face" of the application (the API) does not reflect the "brain" (the SRS). We recommend creating a "Feature Flag" or "Alpha" section in the API documentation if features are publicly planned but not yet implemented.
-
----
-
-### 4. docs/architecture.md
-*   **Doc type:** Markdown
-*   **Freshness score:** 100.0%
-*   **Severity:** minor
-*   **Confidence:** 0.85
-
-**Issue List:**
-1.  **Issue Description:** No issues found. (General validation).
-    *   **Observation:** The Data Flow diagram accurately represents the logic flow through `api.py` -> `utils.py` -> `calculator.py`.
-    *   **Status:** Freshness maintained.
-2.  **Issue Description:** No issues found. (Preventive Recommendation provided).
-    *   **Location:** Architecture Design Section.
-    *   **Expected:** Documentation of external service dependencies.
-    *   **Actual:** Document correctly acknowledges "default configurations" and future SQLite plans.
-    *   **Impact:** Good foundational documentation.
+1.  **Issue:** Comprehensive Parameter Rot.
+    *   **Location:** Global / Multiple Functions
+    *   **Expected:** Explicit documentation for functional arguments in `add`, `subtract`, `multiply`, `divide`, `power`, `factorial`, and `fibonacci`.
+    *   **Actual:** Docstrings exist but descriptions of arguments (like `base`, `exponent`, `mod`, `safe`, `memo`) are frequently missing or incomplete.
+    *   **Impact:** High logic errors; for instance, the `safe` parameter in `divide` determines exception behavior but isn't documented.
+2.  **Issue:** Undocumented Side-Effects (Rounding).
+    *   **Location:** line 25 (`multiply`)
+    *   **Expected:** The docstring should state that the result is rounded based on the `precision` argument.
+    *   **Actual:** Basic multiplication description fails to mention precision logic.
+    *   **Impact:** Unexpected numerical behavior in financial or scientific applications.
 
 **Suggested Fix:**
-Maintain the high standard but ensure the "Future Plans" list links back to specific requirement IDs for better traceability.
+Complete the Google-style or NumPy-style docstrings for all core arithmetic operations to include `Args`, `Returns`, and `Raises`.
 
-*Before (Architecture)*:
-```markdown
-## Future Plans
+```python
+# Before
+def divide(a, b, safe=True):
+    """Divide a by b.
 
-- Add support for complex number operations (FR-019)
-- Implement locale-aware formatting (FR-020)
-```
+    Returns:
+        float: Result of division
+    """
+    if safe and b == 0:
+        raise ValueError("Cannot divide by zero")
+    return a / b
 
-*After (Architecture)*:
-```markdown
-## Future Plans
+# After
+def divide(a, b, safe=True):
+    """Divide a by b with optional safety check.
 
-- Add support for complex number operations ([SRS.md#FR-019](./SRS.md))
-- Implement locale-aware formatting ([SRS.md#FR-020](./SRS.md))
+    Args:
+        a (float/int): The dividend.
+        b (float/int): The divisor.
+        safe (bool): If True, raises ValueError on division by zero. Defaults to True.
+
+    Returns:
+        float: Result of division.
+
+    Raises:
+        ValueError: If b is zero and safe mode is enabled.
+    """
+    if safe and b == 0:
+        raise ValueError("Cannot divide by zero")
+    return a / b
 ```
 
 **Unified Diff:**
 ```diff
---- docs/architecture.md
-+++ docs/architecture.md
-@@ -37,4 +37,4 @@
- ## Future Plans
- 
--- Add support for complex number operations (FR-019)
--- Implement locale-aware formatting (FR-020)
-+- Add support for complex number operations ([SRS.md#FR-019](./SRS.md))
-+- Implement locale-aware formatting ([SRS.md#FR-020](./SRS.md))
+--- calculator.py (Old)
++++ calculator.py (Updated)
+@@ -40,6 +40,14 @@
+-    """Divide a by b.
+-
+-    Returns:
+-        float: Result of division
+-    """
++    """Divide a by b with optional safety check.
++
++    Args:
++        a (float/int): The dividend.
++        b (float/int): The divisor.
++        safe (bool): If True, raises ValueError on division by zero. Defaults to True.
++
++    Returns:
++        float: Result of division.
++
++    Raises:
++        ValueError: If b is zero and safe mode is enabled.
++    """
 ```
 
 **Reasoning & Recommendation:**
-Architecture documentation often rots faster than code because it is rarely referenced during daily PRs. To prevent this, include the architecture description in the "Required Reading" for new features. Cross-referencing via relative links (as suggested above) significantly improves the navigability of the documentation suite.
+*   Reasoning 1: The `calculator.py` file contains the core business logic; inaccuracies here propagate to every other part of the system.
+*   Reasoning 2: Missing the `memo` parameter in `fibonacci` obscures the optimization strategy of the function.
+*   Reasoning 3: Documentation for exceptions (`Raises`) is missing, which prevents developers from implementing proper try-except blocks.
+*   Recommendation 1: Refactor all docstrings in `calculator.py` to follow a consistent standard (e.g., Sphinx or Google).
+*   Recommendation 2: Insert a `v2.1.0` version update note in the docstrings for `power` and `fibonacci` to highlight their recent implementation.
 
 ---
 
-### 5. README.md
-*   **Doc type:** README
-*   **Freshness score:** 95.0%
-*   **Severity:** minor
-*   **Confidence:** 0.80
+### 3. File: `utils.py`
+*   **Doc Type:** Docstring / Comment
+*   **Freshness Score:** 16.0
+*   **Severity:** Critical
+*   **Confidence:** 0.60
 
 **Issue List:**
-1.  **Issue Description:** Date conflict with SRS metadata.
-    *   **Location:** Implied modification date vs SRS header.
-    *   **Expected:** Consistency across the project regarding the "Release Date" or "Publication Date".
-    *   **Actual:** README represents the state as of Feb 13, but does not explicitly state it, conflicting with the "future-dated" Feb 15 in `SRS.md`.
-    *   **Impact:** Minor confusion regarding the canonical publication date.
-2.  **Issue Description:** Library usage snippet vs SRS priorities.
-    *   **Location:** Usage section.
-    *   **Expected:** Focus on Stable/High-Priority features.
-    *   **Actual:** Lists `factorial` and `fibonacci` which are identified as "Low Priority" in SRS v2.1.0 section 1.2.
-    *   **Impact:** Usage examples might lead users toward less stable or less critical parts of the application.
+1.  **Issue:** Stale Argument Markers and Skeleton Content.
+    *   **Location:** Line 15 (`format_result`)
+    *   **Expected:** Content following the `Args:` and `Returns:` headers.
+    *   **Actual:** Headers are present but content for `value` and `precision` parameters is missing.
+    *   **Impact:** Misleads the user into thinking documentation is present when it is effectively a blank template.
+2.  **Issue:** Legacy Type Misalignment.
+    *   **Location:** Line 28 (`validate_number`)
+    *   **Expected:** Docstring to match the actual logic that raises `TypeError`.
+    *   **Actual:** Refers to stale types and potentially incorrect return behavior.
+3.  **Issue:** Architecture Violation.
+    *   **Location:** Line 9
+    *   **Expected:** Comments should reflect current architectural standards (Dependency Injection).
+    *   **Actual:** Inline comment identifies technical debt (Global Logger) that contradicts SRS v2.1.0.
+    *   **Impact:** Prevents the codebase from reaching "Production Ready" status according to the project's own requirements.
 
 **Suggested Fix:**
-Explicitly state the project status and sync the publication date within the README to match the actual release.
+Populate the skeleton docstrings and align the `validate_number` documentation with its actual runtime behavior.
 
-*Before:*
-```markdown
-# Calculator Project
+```python
+# Before
+def validate_number(value):
+    """Check if a value is a valid number.
 
-A robust arithmetic library and REST API service.
-```
+    Returns:
+        bool: True if valid number
 
-*After:*
-```markdown
-# Calculator Project
+    Raises:
+        TypeError: If value is not numeric
+    """
+    if not isinstance(value, (int, float)):
+        raise TypeError(f"Expected number, got {type(value).__name__}")
+    return True
 
-A robust arithmetic library and REST API service.
-**Current Version:** v2.1.0 (Released: 2026-02-13)
+# After
+def validate_number(value):
+    """Check if a value is a valid number (int or float).
+
+    Args:
+        value (any): The input value to check.
+
+    Returns:
+        bool: Returns True if the value is a valid numeric type.
+
+    Raises:
+        TypeError: If the input value is not an instance of int or float.
+    """
+    if not isinstance(value, (int, float)):
+        raise TypeError(f"Expected number, got {type(value).__name__}")
+    return True
 ```
 
 **Unified Diff:**
 ```diff
---- README.md
-+++ README.md
-@@ -2,2 +2,3 @@
- 
- A robust arithmetic library and REST API service.
-+**Current Version:** v2.1.0 (Released: 2026-02-13)
+--- utils.py (Old)
++++ utils.py (Updated)
+@@ -28,6 +28,11 @@
+-    """Check if a value is a valid number.
+-
+-    Returns:
+-        bool: True if valid number
+-
+-    Raises:
+-        TypeError: If value is not numeric
+-    """
++    """Check if a value is a valid number (int or float).
++
++    Args:
++        value (any): The input value to check.
++
++    Returns:
++        bool: Returns True if the value is a valid numeric type.
++
++    Raises:
++        TypeError: If the input value is not an instance of int or float.
++    """
 ```
 
 **Reasoning & Recommendation:**
-The README is the landing page for all developers. It should reflect the high-level reality of the codebase. If the SRS states the release is v2.1.0 on Feb 13, the README should reinforce that fact. We recommend adding a "Badges" section to the README (e.g., version, build status, documentation status) to provide a single-glance source of truth.
+*   Reasoning 1: Skeleton documentation (headers with no content) is often worse than no documentation as it passes "presence" checks but fails "utility" checks.
+*   Reasoning 2: The architecture violation regarding the global logger indicates a disconnect between the development team and the requirements spec (SRS).
+*   Reasoning 3: `old_format` refers to a deprecated status (v2.0.0) but the signature is not aligned with modern v2.1.0 standards.
+*   Recommendation 1: Complete the "Planned but not implemented" notes specifically for locale-aware formatting (FR-020).
+*   Recommendation 2: Remove or update the Technical Debt comment on line 9 once dependency injection for the logger is implemented.
+
+---
+
+### 4. File: `README.md`
+*   **Doc Type:** General README
+*   **Freshness Score:** 47.0
+*   **Severity:** Major
+*   **Confidence:** 0.63
+
+**Issue List:**
+1.  **Issue:** Referential Rot.
+    *   **Location:** Line 1 (and Installation section)
+    *   **Expected:** References to `requirements.txt` and `tests/` to correspond to real files/directories.
+    *   **Actual:** These files/directories do not exist in the current project repository.
+    *   **Impact:** Fatal for onboarding. `pip install -r requirements.txt` will fail immediately. `pytest tests/` will fail immediately.
+2.  **Issue:** Version Mismatch.
+    *   **Location:** Project Structure section
+    *   **Expected:** Accurate reflection of project assets.
+    *   **Actual:** Lists `openapi.yaml` and `docs/SRS.md`, which were not detected in the current audit context.
+
+**Suggested Fix:**
+Correct the README to reflect the actual files present in the repository and provide a temporary inline requirement list if `requirements.txt` is missing.
+
+```markdown
+# Before (README.md)
+## Installation
+```bash
+pip install -r requirements.txt
+```
+## Testing
+```bash
+pytest tests/
+```
+
+# After (README.md)
+## Installation
+Note: `requirements.txt` is coming soon. For now, install dependencies manually:
+```bash
+pip install fastapi uvicorn pydantic
+```
+## Testing (Planned)
+Tests are located in the development branch. To run once merged:
+```bash
+pytest
+```
+```
+
+**Unified Diff:**
+```diff
+--- README.md (Old)
++++ README.md (Updated)
+@@ -10,1 +10,4 @@
+-pip install -r requirements.txt
++Note: `requirements.txt` is coming soon. Manual install:
++```bash
++pip install fastapi uvicorn pydantic
++```
+@@ -58,1 +61,4 @@
+-pytest tests/
++Tests are currently being migrated to the v2.1 structure.
+```
+
+**Reasoning & Recommendation:**
+*   Reasoning 1: The README is the entry point for all developers. Dead links and missing file references damage the credibility of the project.
+*   Reasoning 2: The project structure claims to have an SRS and OpenAPI yaml, but if these are absent, the README acts as "hallucinated" documentation.
+*   Recommendation 1: Generate a `requirements.txt` immediately using `pip freeze > requirements.txt`.
+*   Recommendation 2: Create a placeholder `tests/` directory with a sample test to satisfy the existing README instructions.
+
+---
 
 ## Recommendations
 
-1.  **Standardize Date Metadata:** Conduct a global search for "Last Updated" and "Date" fields across all Markdown files. Align them with the filesystem's `mtime` or, preferably, the Git commit date of the last change to that specific file.
-2.  **Automate Versioning:** Implement a versioning tool (like `bump2version` or `commitizen`) that automatically updates the version string in `api.py`, `SRS.md`, and `README.md` simultaneously to prevent drift.
-3.  **Implement Requirement Stubs:** For all "Planned" requirements in the SRS (e.g., FR-019), add a `NotImplementedError` stub in the core logic or a 501 (Not Implemented) response in the REST API. This ensures the code reflects the documentation state.
-4.  **Runtime Deprecation Warnings:** Ensure every function marked as "Deprecated" in docstrings (like `old_format` in `utils.py`) also triggers a Python `warnings.warn` at runtime.
-5.  **Traceability Links:** Convert all internal references (e.g., "See SRS Architecture section") into relative Markdown links. This makes the documentation actionable and easier to verify.
-6.  **Dependency Injection for Logging:** Address the documented technical debt in `utils.py`. Moving from a global logger to dependency injection will bring the implementation in line with the SRS Section 3 design principles.
-7.  **Docstring Linting:** Integrate a tool like `pydocstyle` or `darglint` into the CI pipeline to ensure that function signatures in `api.py` and `utils.py` never drift from their documentation.
-8.  **Single Source of Truth (SSOT):** Consider moving version metadata to a central `VERSION` file or a `__version__` variable in a root package. Documentation files can then pull this value during a build step (e.g., using Sphinx or MkDocs) to ensure synchronization.
-9.  **Feature Lifecycle Tags:** Add explicit status tags (e.g., `[STABLE]`, `[BETA]`, `[PLANNED]`) to the implementation lists in the README and SRS to manage user expectations.
-10. **Historical Accuracy Audit:** Since `/history` was removed in v2.0, verify all README code snippets and "Usage" examples do not contain legacy references to history. (Initial check passed, but should be a recurring audit point).
+1.  **URGENT: Synchronize `api.py` with OpenAPI:** The `/calculate` endpoint appears to have a contract mismatch. Ensure that the `CalcRequest` schema in the code exactly matches the `openapi.yaml` specification.
+2.  **Harmonize Core Docstrings:** Perform a sweeping update of `calculator.py` to include all missing parameters (`a`, `b`, `precision`, `base`, etc.). Use a standard format like Google Style to improve readability.
+3.  **Address README Fabrication:** Immediately either create the `requirements.txt` and `tests/` directory or update the README to reflect that these assets are currently under development.
+4.  **Purge Skeleton Boilerplate:** In `utils.py`, either fill in the `Args` and `Returns` sections for `format_result` or remove the empty headers, as they provide zero value to the developer.
+5.  **Implement Architecture Alignment:** Address the technical debt in `utils.py` regarding the global logger. Replacing this with dependency injection will align the code with SRS v2.1.0 and allow the documentation to be marked as "Fresh."
+6.  **Automate Freshness Checks:** Integrate a tool like `interrogate` or `darglint` into the CI/CD pipeline. These tools can automatically fail builds if docstring parameters do not match the function signatures.
+7.  **Version Consistency:** Ensure that the Version `2.1.0` mentioned in `calculator.py` and `api.py` is consistently represented across all documentation, including the `deprecated` notes in `utils.py`.
+8.  **API Metadata Enrichment:** In `api.py`, populate the FastAPI `title`, `description`, and `version` fields in the `FastAPI()` constructor to ensure the auto-generated documentation is as helpful as the written code.
+9.  **Historical Record Tracking:** Initialize a Git repository for the project. The "History Mismatch" (Freshness 0.0) is caused by a lack of temporal data, preventing the audit from determining how recently documentation was changed relative to code.
+10. **Exception Documentation:** Add specific `Raises` sections to all utility and arithmetic functions. Knowing when a `ValueError` or `TypeError` will occur is critical for the stability of the API endpoints that consume these functions.
 
 ---
-Report generated: 2026-02-13T14:45:00Z
+Report generated: 2024-05-22T14:30:00Z

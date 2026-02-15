@@ -27,7 +27,7 @@ def create_dataset():
 
     ground_truth = {
         "inputs": {
-            "project_path": "/Users/vinaypodeti/Desktop/Document-Freshness-Auditor_agent/DOCUMENTATION-FRESHNESS-AUDITOR-AGENT-BE/src/document_freshness_auditor/demo-project",
+            "project_path": "/home/i3975/Desktop/hackathon/DOCUMENTATION-FRESHNESS-AUDITOR-AGENT-BE/src/document_freshness_auditor/demo-project",
             "files": [
                 "README.md",
                 "api.py",

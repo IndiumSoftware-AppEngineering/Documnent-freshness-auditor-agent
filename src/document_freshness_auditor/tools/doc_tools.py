@@ -9,6 +9,7 @@ import sys
 from datetime import datetime
 from typing import Dict, List, Set,Optional
 from crewai.tools import BaseTool
+from pathlib import Path
 
 
 def _safe_read_text(path: str) -> str:
@@ -57,39 +58,28 @@ class DocstringSignatureTool(BaseTool):
     description: str = "Checks one .py file for docstring vs function signature mismatches."
 
     def _run(self, file_path: str) -> Dict:
-        if not os.path.isfile(file_path) or not file_path.endswith(".py"):
-            return {"status": "error", "message": "Invalid or missing .py file"}
+            if not os.path.isfile(file_path) or not file_path.endswith(".py"):
+                return {"status": "error", "message": "Invalid or missing .py file"}
 
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                tree = ast.parse(f.read(), filename=file_path)
-        except Exception as e:
-            return {"status": "error", "message": f"Parse error: {str(e)}"}
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    tree = ast.parse(f.read(), filename=file_path)
+            except Exception as e:
+                return {"status": "error", "message": f"Parse error: {str(e)}"}
 
-        issues = []
+            issues = []
 
-    def _run(self, file_path: str) -> str:
-        if not os.path.exists(file_path):
-            return f"Error: File {file_path} not found."
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef):
+                    issue = self._check_function(node)
+                    if issue:
+                        issues.append(issue)
 
-        try:
-            src = _safe_read_text(file_path)
-            tree = ast.parse(src)
-        except Exception as exc:
-            return f"Error parsing {file_path}: {exc}"
-        
-        results = []
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef):
-                issue = self._check_function(node)
-                if issue:
-                    issues.append(issue)
-
-        return {
-            "status": "ok" if not issues else "issues_found",
-            "file": file_path,
-            "issues": issues
-        }
+            return {
+                "status": "ok" if not issues else "issues_found",
+                "file": file_path,
+                "issues": issues
+            }
 
     def _check_function(self, node: ast.FunctionDef) -> Dict or None:
         name = node.name
