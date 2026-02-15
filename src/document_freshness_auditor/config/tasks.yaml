@@ -199,55 +199,67 @@ freshness_scorer_task:
 
 suggestion_task:
   description: >
-    You are fixing documentation files in {project_path}.
+    You are generating FIX SUGGESTIONS ONLY for documentation issues in {project_path}.
 
-    PHASE 1 — FIX FILES (use tools):
-    For EACH file with issues:
-      1. Call 'read_file' with the absolute file path to get the current content.
-      2. Generate the corrected full file content (with documentation fixed).
-      3. Call 'diff_generator' with old_text=<current content>, new_text=<corrected content>.
-      4. Call 'apply_fix' with file_path=<absolute path> and new_content=<corrected content> to WRITE the fix.
-    Repeat steps 1-4 for EVERY file that has issues.
+    IMPORTANT:
+    - Do not edit repository files.
+    - Do not call apply_fix.
+    - Provide before/after snippets and unified diffs as suggestions only.
 
-    PHASE 2 — PRODUCE FINAL REPORT:
-    After ALL files are fixed, your Final Answer MUST be a clean Markdown report
-    with EXACTLY this structure:
+    OUTPUT STABILITY (STRICT):
+    - Return the exact same report structure on every run.
+    - Use this exact heading sequence only:
+      1) # Documentation Freshness Audit Report
+      2) ## Executive Summary
+      3) ## File-by-File Scorecard
+      4) ## File-by-File Analysis
+      5) ## Recommendations
+      6) ---
+      7) Report generated: <ISO-8601 UTC timestamp>
+    - Do not add extra top-level sections.
+    - Do not omit any required section.
+    - If there are no issues in a file, still include that file with "No issues found" and a preventive recommendation.
+
+    LENGTH REQUIREMENT:
+    - Make the report detailed enough for ~10 minutes of reading.
+    - Target 1400-2200 words.
+    - Executive Summary must include 5-8 bullets.
+    - For each file include at least:
+      - 2 issue bullets (or explicit no-issue note)
+      - 3 reasoning bullets
+      - 2 recommendations
+    - Overall Recommendations section must contain at least 8 numbered items.
+
+    Produce a clean Markdown report in this exact structure:
 
     # Documentation Freshness Audit Report
 
     ## Executive Summary
-    (Brief paragraph: project name, number of files analyzed, key findings, actions taken.)
+    - Project files analyzed: **<N>**
+    - Average freshness score: **<avg>**
+    - Severity counts: critical **<n>**, major **<n>**, minor **<n>**
 
     ## File-by-File Scorecard
-    | File Path | Initial Score | Final Score | Status |
-    | :--- | :---: | :---: | :--- |
-    | path/to/file | 45% | 100% | FIXED |
-    (One row per file.)
+    | File | Doc Type | Freshness | Severity | Confidence |
+    |---|---:|---:|---:|---:|
 
-    ## Detailed File-by-File Analysis
-    For each file:
-    ### path/to/file
-    - **Issues found:** (brief list)
-    - **Fix applied:** (what was changed)
-    - **Diff:**
-    ```diff
-    (unified diff showing ONLY the changed lines, NOT the entire file)
-    ```
+    ## File-by-File Analysis
+    For each file include:
+    - doc type, freshness score, severity, confidence
+    - issue list (description, location, expected, actual, impact)
+    - suggested fix before/after snippets
+    - unified diff
+    - short reasoning and recommendation
 
-    ## Recommendations
-    (Numbered list of actionable recommendations.)
-
-    CRITICAL RULES FOR YOUR FINAL ANSWER:
-    - Output ONLY the Markdown report described above.
-    - Do NOT include full file contents — show only diffs of changes.
-    - Do NOT repeat these instructions or reference them in any way.
-    - Do NOT invent custom titles, wrappers, or preambles.
-    - Do NOT include meta-commentary like "BEGIN FINAL ANSWER" or "THE ACTUAL FULL FILE CONTENTS".
-    - The report title MUST be exactly "# Documentation Freshness Audit Report".
+    End with:
+    ---
+    Report generated: <ISO-8601 UTC timestamp>
   expected_output: >
     A clean Markdown report titled "# Documentation Freshness Audit Report" containing:
     an executive summary, a file-by-file scorecard table, detailed analysis with
-    unified diffs (NOT full file contents), and recommendations.
-    All documentation files in {project_path} must also have been updated in-place using apply_fix.
+    suggested before/after snippets and unified diffs, and recommendations.
+    The output must follow a deterministic heading order and be long-form
+    (target 1400-2200 words, approximately 10 minutes reading time).
+    No project files are modified.
   agent: fix_suggester
   human_input: true

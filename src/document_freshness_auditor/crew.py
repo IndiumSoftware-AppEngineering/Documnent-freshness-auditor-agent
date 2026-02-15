@@ -12,7 +12,6 @@ from document_freshness_auditor.tools.doc_tools import (
     SrsParserTool,
     GitAnalyzerTool,
     DiffGeneratorTool,
-    ApplyFixTool,
     ReadFileTool
 )
 from document_freshness_auditor.tools.freshness_scorer import freshness_scorer
@@ -66,7 +65,7 @@ class DocumentFreshnessAuditor():
             config=self.agents_config['fix_suggester'],
             llm=self.fix_llm,
             verbose=True,
-            tools=[ReadFileTool(), DiffGeneratorTool(), ApplyFixTool()]
+            tools=[ReadFileTool(), DiffGeneratorTool()]
         )
 
     @task

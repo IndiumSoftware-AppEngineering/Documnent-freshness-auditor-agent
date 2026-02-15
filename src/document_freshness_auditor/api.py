@@ -221,7 +221,7 @@ def run_crew_background(report_id, project_path):
         report_md = ""
         report_file = os.path.join(os.getcwd(), "freshness_audit_report.md")
         if os.path.exists(report_file):
-            with open(report_file, "r") as f:
+            with open(report_file, "r", encoding="utf-8", errors="replace") as f:
                 report_md = f.read()
 
         if not analysis_json:
