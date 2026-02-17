@@ -73,6 +73,7 @@ class DocumentFreshnessAuditor():
     def suggestion_task(self) -> Task:
         return Task(
             config=self.tasks_config['suggestion_task'],
+            human_input=False,
             output_file='freshness_audit_report.md'
         )
 
@@ -100,7 +101,7 @@ class DocumentFreshnessAuditor():
     def hitl_crew(self) -> Crew:
         suggestion = Task(
             config=self.tasks_config['suggestion_task'],
-            human_input=True,
+            human_input=False,
             output_file='freshness_audit_report.md'
         )
         return Crew(
