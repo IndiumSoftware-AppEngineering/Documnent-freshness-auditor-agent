@@ -13,13 +13,19 @@ warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 def run():
     """
     Run the crew.
+    Usage:
+        uv run run_crew [project_path] [docs_path]
+    If docs_path is omitted, project_path is used for both code and docs.
     """
     # Use the current directory as the project path by default
     # Or use the first command line argument if provided
     project_path = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
-    
+    # Second argument is docs path; default to project_path so single-arg usage is unchanged
+    docs_path = sys.argv[2] if len(sys.argv) > 2 else project_path
+
     inputs = {
         'project_path': project_path,
+        'docs_path': docs_path,
         'current_year': str(datetime.now().year)
     }
 

@@ -1,82 +1,197 @@
 audit_task:
   description: >
-    Audit documentation freshness for {project_path}.
-    
-    1. List all files and categorize: Python (.py), README, API specs (swagger/openapi), requirements.
-    
-    2. DOCSTRING CHECKS:
-       - Extract docstrings from Python functions
-       - Compare parameters in docstring vs function signature
-       - Flag: missing params, extra params, wrong return type, missing exceptions
-       - For each issue: file, function, line, description, severity (critical/major/minor)
-    
-    3. README CHECKS:
-       - Find version numbers, paths, dependencies, examples
-       - Compare against requirements.txt, pyproject.toml, code
-       - Flag: version mismatch, deleted paths, wrong examples, outdated config
-    
-    4. API SPEC CHECKS:
-       - Compare swagger/openapi spec with route implementation
-       - Flag: unimplemented endpoints, schema mismatch, missing validation, wrong method
-    
-    5. CODE COMMENTS:
-       - Find inline comments describing behavior
-       - Check if comments match actual code
-       - Flag: misleading comments, outdated TODOs, false claims
-    
-    6. SRS/REQUIREMENTS:
-       - Parse requirements.md or design.md
-       - Check if features are implemented
-       - Flag: missing features, removed features, unmatched requirement IDs
-    
-    7. FILE HISTORY:
-       - Use git to find when code and docs last changed
-       - Flag files where code changed but docs didn't (6+ months)
-       
-    Every issue must cite specific file content as evidence.
-    If evidence is missing, mark issue as "low confidence" instead of omitting it.
-
-    Output: JSON array with issues grouped by file, each with severity and description.
+    Audit the documentation in the project at {project_path}. Documentation files (README, SRS, etc.) are under {docs_path}.
+    Steps:
+    1. FIRST, use the 'List Files Tool' to see all files in {project_path} (code) and in {docs_path} (documentation).
+    2. Then, for each relevant Python file under {project_path}, use 'Docstring Signature Auditor' to check docstrings.
+    3. Use 'README Structure Auditor' on the README in {docs_path} (or {project_path} if same).
+    4. Use 'API Implementation Auditor' if routes are detected in {project_path}.
+    5. Use 'Code Comment Auditor' to extract context from code in {project_path}.
+    6. Use 'SRS Parser' to parse local SRS markdown files in {docs_path}.
+    7. Use 'git_analyzer' to get file modification history and last-changed dates.
   expected_output: >
-    JSON array of issues: [{"file": "path", "type": "docstring|readme|api|srs|comment", "line": N, "severity": "critical|major|minor", "description": "..."}]
+    A detailed audit report of all discrepancies found, grouped by file path.
   agent: documentation_auditor
 
 
 freshness_scorer_task:
   description: >
-    Score documentation freshness (0-100%) based on audit issues.
-    
-    For each file with issues:
-    
-    1. COUNT ISSUES:
-       - Count critical, major, minor issues
-    
-    2. SCORE COMPONENTS (0.0-1.0 each):
-       - structural_match: (documented_items / total_items) - e.g., 2 of 4 params = 0.50
-       - semantic_accuracy: Does doc match behavior? 1.0=perfect, 0.5=partial, 0.0=wrong
-       - recency_factor: Days since last update? 0-7 days=1.0, 7-30=0.8, 30-90=0.6, 90-180=0.4, 180+=0.0
-       - completeness: What percentage documented? (0.0-1.0)
-       - mismatch_clarity: How obvious? 0.9-1.0=obvious, 0.5-0.7=partial, 0.0-0.4=unclear
-       - code_complexity: 0.0-0.3=simple, 0.4-0.7=moderate, 0.8-1.0=complex
-       - doc_structure_quality: 0.8-1.0=well-structured, 0.5-0.7=acceptable, 0.0-0.4=poor
-    
-    3. CALCULATE SCORE:
-       freshness = (structural_match×0.20 + semantic_accuracy×0.25 + recency_factor×0.25 + completeness×0.20 + mismatch_clarity×0.10) × 100
-       Adjust: subtract 5 per critical, 3 per major, 1 per minor issue
-       Final: max(0, min(100, freshness))
-    
-    4. ASSIGN SEVERITY:
-       <40%: CRITICAL, 40-70%: MAJOR, 70-85%: MINOR, >85%: EXCELLENT
-    
-    5. ASSIGN CONFIDENCE (0.0-1.0):
-       confidence = (mismatch_clarity×0.35 + doc_structure×0.25 + (1-complexity/2)×0.20 + semantic_accuracy×0.20)
-    
-    6. FOR EACH ISSUE LIST:
-       {issue_name, location, severity, what_docs_say, what_code_does, why_it_matters, fix_priority}
-    
-    Output: JSON with summary, per-file scores, components, issues, and recommendations.
+    Given the comparison data from the Code & Documentation Analyzer, score each 
+        file's documentation freshness ,classify severity and confidence.
+       
+        YOUR TASKS:
+        
+        1.Parse Analyzer Output: Extract all comparison data for each file
+        
+        2.Evaluate Scoring Components(assign values 0-1 for each):
+        
+           A. FRESHNESS FACTORS:
+           - structural_match: Do parameters, return types, and endpoints align?
+             * 1.0 = Perfect match
+             * 0.5 = Some mismatches
+             * 0.0 = Major structural differences
+           
+           - semantic_accuracy: Does documentation describe actual behavior?
+             * 1.0 = Description perfectly matches implementation
+             * 0.5 = Partially accurate, some outdated info
+             * 0.0 = Description completely wrong
+           
+           - recency_factor: How recent is the documentation vs code?
+             * 1.0 = Updated within days of code change
+             * 0.5 = Updated within months
+             * 0.0 = Not updated in 6+ months after code change
+           
+           - completeness: Are all code elements documented?
+             * 1.0 = All functions/classes/methods documented
+             * 0.5 = 50% documented
+             * 0.0 = Minimal or no documentation
+        
+           B. CONFIDENCE FACTORS:
+           - mismatch_clarity: How obvious are the discrepancies?
+             * 1.0 = Clear, objective mismatch (e.g., param count difference)
+             * 0.5 = Requires some interpretation
+             * 0.0 = Highly subjective or unclear
+           
+           - code_complexity: How complex is the code?
+             * 1.0 = Very complex, hard to understand
+             * 0.5 = Moderate complexity
+             * 0.0 = Simple, straightforward
+           
+           - doc_structure_quality: How well-structured is the documentation?
+             * 1.0 = Well-structured, easy to parse
+             * 0.5 = Acceptable structure
+             * 0.0 = Poor or no structure
+        
+        3.Use freshness_scorer Tool: Call the tool with all 7 parameters to get:
+           - freshness_score (0-100)
+           - severity (critical/major/minor)
+           - confidence (0-1)
+           - detailed breakdown
+        
+        4.Document Specific Issues: For each file, list problems with:
+           - Clear description of the issue
+           - Location (line number or section)
+           - Expected value (what code shows)
+           - Actual value (what doc says)
+           - Impact explanation (why this matters)
+        
+        5.Provide Recommendations: Actionable steps to improve documentation freshness
+        
+          SCORING INTERPRETATION:
+        
+          Freshness Score:
+            - < 50% → CRITICAL: Immediate attention required, documentation unusable
+            - 50-74% → MAJOR: Should be addressed soon, significant issues
+            - >= 75% → MINOR: Low priority, minor improvements needed
+        
+          Confidence Level:
+            - > 0.8 → HIGH: Very certain about the assessment
+            - 0.5-0.8 → MEDIUM: Reasonably confident
+            - < 0.5 → LOW: Requires manual review
+        
+        EXAMPLES:
+        
+        Example 1 - Clear Parameter Mismatch:
+        ```
+        freshness_scorer(
+            structural_match=0.25,      # 1 of 4 params documented
+            semantic_accuracy=0.70,     # Description mostly accurate
+            recency_factor=0.30,        # 6 months outdated
+            completeness=0.60,          # 3 of 5 methods documented
+            mismatch_clarity=0.95,      # Very clear param count difference
+            code_complexity=0.40,       # Moderate complexity
+            doc_structure_quality=0.80  # Well-structured docs
+        )
+        → Score: ~42% (critical), Confidence: 0.82 (high)
+        ```
+        
+        Example 2 - Semantic Drift:
+        ```
+        freshness_scorer(
+            structural_match=0.90,      # Structure looks good
+            semantic_accuracy=0.40,     # Behavior changed, docs didn't
+            recency_factor=0.20,        # Very outdated
+            completeness=0.85,          # Well documented
+            mismatch_clarity=0.45,      # Requires interpretation
+            code_complexity=0.70,       # Complex code
+            doc_structure_quality=0.75  # Good structure
+        )
+        → Score: ~61% (major), Confidence: 0.48 (low - needs review)
+        ```
+        
+        **OUTPUT REQUIREMENTS:**
+        Produce a comprehensive JSON report for each file analyzed.
   expected_output: >
-    JSON report: {summary: {total, critical, major, minor, avg_score}, file_scores: [{file_path, freshness_score, severity, confidence, components, issues}]}
+    A JSON array containing detailed freshness assessments for each file:
+       
+       [
+         {
+           "file_path": "src/api/user_service.py",
+           "doc_type": "inline_docstring",
+           "freshness_score": 45.5,
+           "severity": "critical",
+           "confidence": 0.92,
+           "score_breakdown": {
+             "structural_match": 0.30,
+             "semantic_accuracy": 0.50,
+             "recency_factor": 0.60,
+             "completeness": 0.40
+           },
+           "confidence_factors": {
+             "mismatch_clarity": 0.95,
+             "code_complexity": 0.40,
+             "doc_structure_quality": 0.80
+           },
+           "issues": [
+             {
+               "description": "Parameter mismatch in create_user method",
+               "location": "line 45, create_user() docstring",
+               "expected": "4 parameters: username, email, password, role",
+               "actual": "2 parameters: username, email",
+               "impact": "Developers will be unaware of required 'password' and 'role' parameters, leading to incorrect API usage"
+             },
+             {
+               "description": "Return type documentation outdated",
+               "location": "line 52",
+               "expected": "Returns: Dict[str, Any] with user_id, timestamp, status",
+               "actual": "Returns: int (user_id only)",
+               "impact": "Consumers expecting only user_id will break when accessing timestamp/status fields"
+             }
+           ],
+           
+         },
+         {
+           "file_path": "src/utils/validators.py",
+           "doc_type": "inline_docstring",
+           "freshness_score": 82.3,
+           "severity": "minor",
+           "confidence": 0.88,
+           "score_breakdown": {
+             "structural_match": 0.90,
+             "semantic_accuracy": 0.85,
+             "recency_factor": 0.70,
+             "completeness": 0.80
+           },
+           "confidence_factors": {
+             "mismatch_clarity": 0.85,
+             "code_complexity": 0.25,
+             "doc_structure_quality": 0.90
+           },
+           "issues": [
+             {
+               "description": "Minor example outdated in validate_email()",
+               "location": "line 23, docstring example",
+               "expected": "Example should show new domain validation",
+               "actual": "Example uses old validation pattern",
+               "impact": "Low - developers may use outdated pattern in examples"
+             }
+           ],
+           
+         }
+       ]
+       
+       Include all files from analyzer output with complete scoring details.
+
   agent: freshness_scorer
   context:
     - audit_task
@@ -84,7 +199,7 @@ freshness_scorer_task:
 
 suggestion_task:
   description: >
-    You are generating FIX SUGGESTIONS ONLY for documentation issues in {project_path}.
+    You are generating FIX SUGGESTIONS ONLY for documentation issues in {project_path} / {docs_path}.
 
     IMPORTANT:
     - Do not edit repository files.
@@ -147,7 +262,4 @@ suggestion_task:
     (target 1400-2200 words, approximately 10 minutes reading time).
     No project files are modified.
   agent: fix_suggester
-  context:
-    - audit_task
-    - freshness_scorer_task
-  human_input: true
+  # human_input: true
