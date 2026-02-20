@@ -1,78 +1,69 @@
 audit_task:
   description: >
-    Audit documentation freshness for {project_path}.
+    Audit documentation freshness for {project_path} by following these EXACT steps:
     
-    1. List all files and categorize: Python (.py), README, API specs (swagger/openapi), requirements.
+    1. DISCOVERY: Use 'list_files' to get a complete list of all files in the project.
     
-    2. DOCSTRING CHECKS:
-       - Extract docstrings from Python functions
-       - Compare parameters in docstring vs function signature
-       - Flag: missing params, extra params, wrong return type, missing exceptions
-       - For each issue: file, function, line, description, severity (critical/major/minor)
+    2. CHECKLIST: Create a mental or scratchpad checklist of all discovered files.
     
-    3. README CHECKS:
-       - Find version numbers, paths, dependencies, examples
-       - Compare against requirements.txt, pyproject.toml, code
-       - Flag: version mismatch, deleted paths, wrong examples, outdated config
+    3. ITERATIVE ANALYSIS (LOOP): For EACH file in your checklist, perform the appropriate checks, ALWAYS passing 'project_root={project_path}' to EVERY tool:
+       - Python Files (.py): 
+         * Run 'Docstring Signature Auditor' (passing project_root={project_path}).
+         * Run 'Code Comment Auditor' (passing project_root={project_path}).
+         * Run 'git_analyzer' (passing project_root={project_path}).
+       - Markdown Files (.md):
+         * Run 'README Structure Auditor' (passing project_root={project_path}) if it's a README.
+         * Run 'SRS Parser' (passing path={project_path}) if it's an SRS.
+       - API Specs (yaml/json):
+         * Run 'API Implementation Auditor' (passing project_root={project_path}).
     
-    4. API SPEC CHECKS:
-       - Compare swagger/openapi spec with route implementation
-       - Flag: unimplemented endpoints, schema mismatch, missing validation, wrong method
+    4. THOROUGHNESS CHECK: Verify you have called at least one tool for EVERY file listed in step 1.
     
-    5. CODE COMMENTS:
-       - Find inline comments describing behavior
-       - Check if comments match actual code
-       - Flag: misleading comments, outdated TODOs, false claims
-    
-    6. SRS/REQUIREMENTS:
-       - Parse requirements.md or design.md
-       - Check if features are implemented
-       - Flag: missing features, removed features, unmatched requirement IDs
-    
-    7. FILE HISTORY:
-       - Use git to find when code and docs last changed
-       - Flag files where code changed but docs didn't (6+ months)
-       
-    Every issue must cite specific file content as evidence.
-    If evidence is missing, mark issue as "low confidence" instead of omitting it.
+    5. REPORTING:
+       - Assemble a JSON object containing a 'files' array.
+       - Each entry in 'files' MUST include:
+          * 'file': The normalized relative path.
+          * 'metrics': A dictionary with these EXACT keys: 
+               - 'total_functions': int
+               - 'functions_with_docstrings': int
+               - 'total_params': int
+               - 'documented_params': int
+               - 'critical_issues': int
+               - 'major_issues': int
+               - 'minor_issues': int
+               - 'last_updated_iso': str (ISO-8601)
+               - 'doc_type': str (inline_docstring, readme, api_spec, or srs)
+           * 'issues': The list of findings (can be an empty list if no issues).
+       - You MUST include an entry for EVERY single file found in the DISCOVERY step.
+       - FINAL OUTPUT MUST BE PURE JSON. No conversation, no preamble.
 
     Output: JSON array with issues grouped by file, each with severity and description.
   expected_output: >
-    JSON array of issues: [{"file": "path", "type": "docstring|readme|api|srs|comment", "line": N, "severity": "critical|major|minor", "description": "..."}]
+    JSON array of issues: [{"file": "path", "type": "docstring|readme|api|srs|comment", "line": N, "severity": "critical|major|minor", "description": "...", "metrics": {...}}]
   agent: documentation_auditor
 
 
 freshness_scorer_task:
   description: >
-    Score documentation freshness (0-100%) based on audit issues.
+    Calculate documentation freshness scores (0-100%) and confidence levels 
+    EXCLUSIVELY using the 'freshness_scorer' tool for EVERY file identified 
+    in the audit_task.
     
-    For each file with issues:
-    
-    1. COUNT ISSUES:
-       - Count critical, major, minor issues
-    
-    2. SCORE COMPONENTS (0.0-1.0 each):
-       - structural_match: (documented_items / total_items) - e.g., 2 of 4 params = 0.50
-       - semantic_accuracy: Does doc match behavior? 1.0=perfect, 0.5=partial, 0.0=wrong
-       - recency_factor: Days since last update? 0-7 days=1.0, 7-30=0.8, 30-90=0.6, 90-180=0.4, 180+=0.0
-       - completeness: What percentage documented? (0.0-1.0)
-       - mismatch_clarity: How obvious? 0.9-1.0=obvious, 0.5-0.7=partial, 0.0-0.4=unclear
-       - code_complexity: 0.0-0.3=simple, 0.4-0.7=moderate, 0.8-1.0=complex
-       - doc_structure_quality: 0.8-1.0=well-structured, 0.5-0.7=acceptable, 0.0-0.4=poor
-    
-    3. CALCULATE SCORE:
-       freshness = (structural_match×0.20 + semantic_accuracy×0.25 + recency_factor×0.25 + completeness×0.20 + mismatch_clarity×0.10) × 100
-       Adjust: subtract 5 per critical, 3 per major, 1 per minor issue
-       Final: max(0, min(100, freshness))
-    
-    4. ASSIGN SEVERITY:
-       <40%: CRITICAL, 40-70%: MAJOR, 70-85%: MINOR, >85%: EXCELLENT
-    
-    5. ASSIGN CONFIDENCE (0.0-1.0):
-       confidence = (mismatch_clarity×0.35 + doc_structure×0.25 + (1-complexity/2)×0.20 + semantic_accuracy×0.20)
-    
-    6. FOR EACH ISSUE LIST:
-       {issue_name, location, severity, what_docs_say, what_code_does, why_it_matters, fix_priority}
+    STRICT INSTRUCTIONS:
+    1. For each file in the audit output:
+       a. Extract all available metrics from the audit task JSON for that file.
+       b. Create a 'metrics' dictionary containing EXACTLY these keys:
+          - doc_type (e.g., inline_docstring, readme, api_spec)
+          - total_functions, functions_with_docstrings
+          - total_params, documented_params
+          - critical_issues, major_issues, minor_issues
+          - last_updated_iso (if available from git_analyzer)
+       c. CALL the 'freshness_scorer' tool with:
+          - file_path: the file's path
+          - metrics: the dictionary you created
+       d. Capture the EXACT output from the tool.
+    2. NEVER estimate any score or severity yourself.
+    3. FINAL OUTPUT MUST BE PURE JSON. No conversation, no preamble.
     
     Output: JSON with summary, per-file scores, components, issues, and recommendations.
   expected_output: >
@@ -124,11 +115,15 @@ suggestion_task:
     - Average freshness score: **<avg>**
     - Severity counts: critical **<n>**, major **<n>**, minor **<n>**
 
-    ## File-by-File Scorecard
+    ## File‑by‑File Scorecard
+    - **SORTING RULE**: THIS TABLE MUST BE SORTED ALPHABETICALLY BY FILE PATH (A-Z). NO EXCEPTIONS.
+    - Use normalized relative paths (e.g., api.py, utils.py).
     | File | Doc Type | Freshness | Severity | Confidence |
-    |---|---:|---:|---:|---:|
+    |---|---|---|---|---|
+    | (Use EXACT values from freshness_scorer_task output) |
 
     ## File-by-File Analysis
+    - **ORDER**: ANALYZE FILES IN THE SAME SORTED ORDER AS THE SCORECARD.
     For each file include:
     - doc type, freshness score, severity, confidence
     - issue list (description, location, expected, actual, impact)

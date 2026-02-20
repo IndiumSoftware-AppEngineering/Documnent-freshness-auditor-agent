@@ -38,7 +38,8 @@ class DocumentFreshnessAuditor():
                 SrsParserTool(),
                 GitAnalyzerTool()
             ],
-            verbose=True
+            verbose=True,
+            max_iter=50
         )
 
     @agent
