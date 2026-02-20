@@ -74,7 +74,8 @@ class DocumentFreshnessAuditor():
         return Task(
             config=self.tasks_config['suggestion_task'],
             human_input=False,
-            output_file=os.getenv("FRESHNESS_AUDIT_OUTPUT_FILE", "freshness_audit_report.md")
+            create_directory=True,
+            output_file="{audit_output_path}"
         )
 
     def analysis_only_crew(self) -> Crew:
@@ -89,7 +90,8 @@ class DocumentFreshnessAuditor():
         suggestion = Task(
             config=self.tasks_config['suggestion_task'],
             human_input=False,
-            output_file=os.getenv("FRESHNESS_AUDIT_OUTPUT_FILE", "freshness_audit_report.md")
+            create_directory=True,
+            output_file="{audit_output_path}"
         )
         return Crew(
             agents=[self.fix_suggester()],
@@ -102,7 +104,8 @@ class DocumentFreshnessAuditor():
         suggestion = Task(
             config=self.tasks_config['suggestion_task'],
             human_input=False,
-            output_file=os.getenv("FRESHNESS_AUDIT_OUTPUT_FILE", "freshness_audit_report.md")
+            create_directory=True,
+            output_file="{audit_output_path}"
         )
         return Crew(
             agents=[self.documentation_auditor(), self.freshness_scorer(), self.fix_suggester()],

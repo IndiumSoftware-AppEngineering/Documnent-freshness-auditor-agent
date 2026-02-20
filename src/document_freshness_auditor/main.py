@@ -77,7 +77,7 @@ def run():
             "outputs",
             args.artifact_id,
             "insights",
-            "wcag_audit"
+            "Doc_freshness_audit"
         )
     else:
         # Fallback to default structure
@@ -87,12 +87,12 @@ def run():
     os.makedirs(output_dir, exist_ok=True)
     output_file = os.path.join(output_dir, "freshness_audit_report.md")
     console.print(f"[blue]Output will be written to:[/blue] {output_file}")
-    os.environ["FRESHNESS_AUDIT_OUTPUT_FILE"] = output_file
 
     inputs = {
         'project_path': args.project_path,
         'docs_path': args.docs_path,
-        'current_year': str(datetime.now().year)
+        'current_year': str(datetime.now().year),
+        'audit_output_path': output_file,
     }
 
     try:
