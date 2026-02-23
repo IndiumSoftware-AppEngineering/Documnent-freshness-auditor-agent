@@ -22,17 +22,17 @@ audit_task:
     5. REPORTING:
        - Assemble a JSON object containing a 'files' array.
        - Each entry in 'files' MUST include:
-          * 'file': The normalized relative path.
-          * 'metrics': A dictionary with these EXACT keys: 
-               - 'total_functions': int
-               - 'functions_with_docstrings': int
-               - 'total_params': int
-               - 'documented_params': int
-               - 'critical_issues': int
-               - 'major_issues': int
-               - 'minor_issues': int
-               - 'last_updated_iso': str (ISO-8601)
-               - 'doc_type': str (inline_docstring, readme, api_spec, or srs)
+           * 'file': The normalized RELATIVE path (e.g., 'api.py'). NEVER use absolute paths.
+           * 'metrics': A dictionary with these EXACT keys (ignore others): 
+                - total_functions
+                - functions_with_docstrings
+                - total_params
+                - documented_params
+                - critical_issues
+                - major_issues
+                - minor_issues
+                - last_updated_iso
+                - doc_type
            * 'issues': The list of findings (can be an empty list if no issues).
        - You MUST include an entry for EVERY single file found in the DISCOVERY step.
        - FINAL OUTPUT MUST BE PURE JSON. No conversation, no preamble.
@@ -52,15 +52,19 @@ freshness_scorer_task:
     STRICT INSTRUCTIONS:
     1. For each file in the audit output:
        a. Extract all available metrics from the audit task JSON for that file.
-       b. Create a 'metrics' dictionary containing EXACTLY these keys:
-          - doc_type (e.g., inline_docstring, readme, api_spec)
-          - total_functions, functions_with_docstrings
-          - total_params, documented_params
-          - critical_issues, major_issues, minor_issues
-          - last_updated_iso (if available from git_analyzer)
-       c. CALL the 'freshness_scorer' tool with:
-          - file_path: the file's path
-          - metrics: the dictionary you created
+       b. CALL the 'freshness_scorer' tool with these arguments for EVERY SINGLE file:
+          - file_path: the file's RELATIVE path (e.g., 'api.py')
+          - metrics: a structured object containing:
+            - doc_type: str (ALLOWED: inline_docstring, readme, api_spec, srs, documentation)
+            - total_functions: int
+            - functions_with_docstrings: int
+            - total_params: int
+            - documented_params: int
+            - critical_issues: int
+            - major_issues: int
+            - minor_issues: int
+            - last_updated_iso: str (YYYY-MM-DD or empty string)
+       c. Use the tool response ONLY.
        d. Capture the EXACT output from the tool.
     2. NEVER estimate any score or severity yourself.
     3. FINAL OUTPUT MUST BE PURE JSON. No conversation, no preamble.
@@ -76,6 +80,10 @@ freshness_scorer_task:
 suggestion_task:
   description: >
     You are generating FIX SUGGESTIONS ONLY for documentation issues in {project_path}.
+
+    ROBOTIC SORTING RULE (URGENT/CRITICAL):
+    - You MUST sort the final report (Scorecard AND Analysis) strictly ALPHABETICALLY by file path (A-Z).
+    - This is your FIRST priority. If the list is not sorted, the report is a FAILURE.
 
     IMPORTANT:
     - Do not edit repository files.
@@ -116,8 +124,10 @@ suggestion_task:
     - Severity counts: critical **<n>**, major **<n>**, minor **<n>**
 
     ## File‑by‑File Scorecard
-    - **SORTING RULE**: THIS TABLE MUST BE SORTED ALPHABETICALLY BY FILE PATH (A-Z). NO EXCEPTIONS.
-    - Use normalized relative paths (e.g., api.py, utils.py).
+    - **SORTING RULE (CRITICAL)**: THIS TABLE MUST BE SORTED ALPHABETICALLY BY FILE PATH (A-Z).
+    - Use the standard ASCII order (e.g., api.py comes before utils.py).
+    - If you miss this, the report is invalid.
+    - Use normalized RELATIVE paths ONLY (e.g., api.py, docs/SRS.md). NEVER use absolute paths starting with /Users/...
     | File | Doc Type | Freshness | Severity | Confidence |
     |---|---|---|---|---|
     | (Use EXACT values from freshness_scorer_task output) |
@@ -146,3 +156,6 @@ suggestion_task:
     - audit_task
     - freshness_scorer_task
   human_input: true
+
+
+  

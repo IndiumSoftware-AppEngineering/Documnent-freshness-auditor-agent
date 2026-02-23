@@ -22,6 +22,15 @@ class DocumentFreshnessAuditor():
 
     agents: List[BaseAgent]
     tasks: List[Task]
+    
+    def __init__(self):
+        self.llm = LLM(
+            model=os.environ.get("MODEL_NAME", "gpt-4o"),
+            base_url=os.environ.get("API_BASE"),
+            api_key=os.environ.get("OPENAI_API_KEY", "NA"),
+            temperature=0.0,
+            timeout=120
+        )
 
 
 
@@ -39,7 +48,8 @@ class DocumentFreshnessAuditor():
                 GitAnalyzerTool()
             ],
             verbose=True,
-            max_iter=50
+            max_iter=50,
+            llm=self.llm
         )
 
     @agent
@@ -47,7 +57,8 @@ class DocumentFreshnessAuditor():
         return Agent(
             config=self.agents_config['freshness_scorer'],
             verbose=True,
-            tools=[freshness_scorer]
+            tools=[freshness_scorer],
+            llm=self.llm
         )
 
     @agent
@@ -55,7 +66,8 @@ class DocumentFreshnessAuditor():
         return Agent(
             config=self.agents_config['fix_suggester'],
             verbose=True,
-            tools=[ReadFileTool(), DiffGeneratorTool()]
+            tools=[ReadFileTool(), DiffGeneratorTool()],
+            llm=self.llm
         )
 
     @task

@@ -294,8 +294,7 @@ class ApiImplementationTool(BaseTool):
     name: str = "API Implementation Auditor"
     description: str = "Compares OpenAPI/Swagger spec against API implementation code."
 
-    def _run(self, spec_path: str, impl_path: str, **kwargs: Any) -> Dict:
-        project_root = kwargs.get("project_root", "")
+    def _run(self, spec_path: str, impl_path: str, project_root: str = "", **kwargs: Any) -> Dict:
         abs_spec = _get_abs_path(spec_path, project_root)
         abs_impl = _get_abs_path(impl_path, project_root)
 
@@ -514,21 +513,22 @@ class SrsParserTool(BaseTool):
     name: str = "SRS Parser"
     description: str = "Parses local SRS markdown files and extracts headings, requirement IDs, and summary text."
 
-    def _run(self, path: str) -> Dict[str, Any]:
-        if not os.path.exists(path):
-            return {"status": "error", "message": f"Path {path} not found."}
+    def _run(self, path: str, project_root: str = "") -> Dict[str, Any]:
+        abs_path = _get_abs_path(path, project_root)
+        if not os.path.exists(abs_path):
+            return {"status": "error", "message": f"Path {abs_path} not found."}
 
         md_files = []
-        if os.path.isdir(path):
-            for root, dirs, files in os.walk(path):
+        if os.path.isdir(abs_path):
+            for root, dirs, files in os.walk(abs_path):
                 dirs[:] = [d for d in dirs if not d.startswith('.')]
                 for file in files:
                     if file.lower().endswith(".md") and not file.startswith('.'):
                         md_files.append(os.path.join(root, file))
         else:
-            if not path.lower().endswith(".md"):
+            if not abs_path.lower().endswith(".md"):
                 return {"status": "error", "message": "SRS Parser expects a markdown (.md) file or a directory containing markdown files."}
-            md_files = [path]
+            md_files = [abs_path]
 
         results = []
         req_pattern = re.compile(r"\b([A-Z]{2,}-\d+)\b")
@@ -537,8 +537,17 @@ class SrsParserTool(BaseTool):
             headings = [line.strip() for line in content.splitlines() if line.strip().startswith("#")]
             req_ids = list(dict.fromkeys(req_pattern.findall(content)))
             summary = content[:400].strip().replace("\n", " ")
+            
+            # Normalize path for result
+            display_path = md_file
+            if project_root:
+                try:
+                    display_path = os.path.relpath(md_file, project_root)
+                except Exception:
+                    pass
+
             results.append({
-                "file": md_file,
+                "file": display_path,
                 "headings": headings,
                 "requirement_ids": req_ids,
                 "summary": summary
@@ -568,7 +577,8 @@ class GitAnalyzerTool(BaseTool):
 
         repo_root = self._find_git_root(os.path.dirname(abs_path))
         if not repo_root:
-            last_changed = datetime.fromtimestamp(os.path.getmtime(abs_path)).isoformat()
+            mtime = os.path.getmtime(abs_path)
+            last_changed = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d')
             return {
                 "status": "no_git",
                 "last_changed": last_changed,
@@ -597,10 +607,10 @@ class GitAnalyzerTool(BaseTool):
                     "subject": subject
                 })
 
-            last_changed_date = entries[0]["date"] if entries else "unknown"
+            last_changed_date = entries[0]["date"][:10] if entries else "unknown"  # Just YYYY-MM-DD
             return {
                 "last_changed": last_changed_date, 
-                "last_updated_iso": entries[0]["date"] if entries else None,
+                "last_updated_iso": last_changed_date,
                 "history": entries
             }
         except subprocess.CalledProcessError as exc:
