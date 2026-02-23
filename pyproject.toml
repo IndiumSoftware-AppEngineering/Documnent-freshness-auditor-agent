@@ -10,7 +10,8 @@ dependencies = [
     "python-dotenv",
     "python-dotenv",
     "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.34.0"
+    "uvicorn[standard]>=0.34.0",
+    "ollama>=0.6.1",
 ]
 
 [project.scripts]
